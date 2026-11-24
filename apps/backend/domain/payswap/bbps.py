@@ -1,9 +1,9 @@
 """Record a BBPS collection.
 
-HTTP caller: api/v1/routes/payswap.py BbpsPaymentView (POST /api/v1/payswap/bbps/payments/).
+Not mounted. The routed PaySwap call is POST /api/v1/payswap/vouchers/order
+(domain/payswap/vouchers.py, api/v1/routes/payswap.py).
 App caller: apps/payswap/features/bbps, context payswap, role retailer.
 Downstream: integrations/bbps.py. Does not import domain/parkpe.
-The Idempotency-Key is applied by the view via core/idempotency.py, before this runs.
 """
 
 from __future__ import annotations

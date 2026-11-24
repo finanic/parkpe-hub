@@ -13,7 +13,7 @@ python apps/backend/manage.py runserver 127.0.0.1:4610
 | Folder | Responsibility |
 | --- | --- |
 | `config/` | Django settings, `/api/v1/` mount, CORS for ports 4310, 4500, and 4610. |
-| `api/v1/routes` | `health/`, `parkpe/parking/holds/`, `payswap/bbps/payments/`. ParkPe and PaySwap handlers stay in separate modules. |
+| `api/v1/routes` | `health/`, `parkpe/sessions/initiate`, `payswap/vouchers/order`. ParkPe and PaySwap handlers stay in separate modules. |
 | `api/v1/deps.py` | Reads `X-App-Context` from `packages/sdk-client` and rejects the wrong app. |
 | `core/security.py` | Request scope checks for `/api/v1`. Password and token primitives stay in `auth/security.py`. |
 | `core/idempotency.py` | Same `Idempotency-Key` returns the stored money-movement result and does not post twice. |

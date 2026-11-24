@@ -96,7 +96,7 @@ class ScopedRouteTests(TestCase):
             second = self._voucher("payswap", "key-voucher", "Amazon", "100.00")
         self.assertEqual(first.status_code, 201)
         self.assertEqual(second.json(), first.json())
-        self.assertEqual(order.call_count, 1, first.content)
+        self.assertEqual(order.call_count, 1)
 
     def test_foreign_owner_is_rejected(self):
         self.client.cookies["auth_access"] = "customer-token"

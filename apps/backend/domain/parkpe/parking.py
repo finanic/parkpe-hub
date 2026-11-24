@@ -1,6 +1,7 @@
 """Hold a parking bay.
 
-HTTP caller: api/v1/routes/parkpe.py ParkingHoldView (POST /api/v1/parkpe/parking/holds/).
+Not mounted. The routed ParkPe call is POST /api/v1/parkpe/sessions/initiate
+(domain/parkpe/sessions.py, api/v1/routes/parkpe.py).
 App caller: apps/parkpe/features/parking, context parkpe, role customer.
 Downstream: integrations/parking.py. Does not import domain/payswap.
 """
