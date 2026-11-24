@@ -1,0 +1,16 @@
+---
+description: Mandatory baseline. Every session follows AGENTS.md.
+alwaysApply: true
+---
+
+# Baseline
+
+`AGENTS.md` at the repo root is the engineering baseline. Read it before editing and follow it for the whole session.
+
+- One folder per product: ParkPe `apps/parkpe/` (:4310), PaySwap `apps/payswap/` (:4500), API `apps/backend/` (auth :4600, Django :4610). Shared code is `packages/contracts`, `packages/sdk-client`, `packages/ui-tokens`. Do not copy one app into the other.
+- Edit only the files the task needs. Leave unrelated modules and working behavior alone.
+- Write in the voice already in the tree: short comments that name the other file, route, or role. No filler and no banner comments.
+- Shared names live in `apps/backend/auth/contract.py`. Auth checks live in `apps/backend/auth/server.py`, not in the browser.
+- After an edit, check the callers that comment points at, run the check `AGENTS.md` names for that area, and say what you ran and what you skipped.
+
+A narrower rule in `.cursor/rules/` adds detail for its own files. It does not relax this baseline.

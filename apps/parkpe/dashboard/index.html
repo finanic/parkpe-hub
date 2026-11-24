@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard · ParkPe</title>
+    <link rel="icon" href="../assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&family=Ubuntu:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/dashboard.css?v=15" />
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to dashboard</a>
+    <div class="shell">
+      <button class="sidebar-backdrop" type="button" aria-label="Close navigation menu"></button>
+
+      <aside class="sidebar">
+        <a class="brand" href="#dashboard" aria-label="ParkPe dashboard">
+          <img src="../assets/img/logo/parkpe_logo.png" alt="ParkPe" />
+        </a>
+
+        <div class="sidebar-scroll">
+          <nav class="nav" aria-label="Main">
+            <a class="nav-link is-active" href="#dashboard" data-view="dashboard">
+              <span class="nav-icon"><span class="mi">dashboard</span></span>
+              <span class="nav-label">Dashboard</span>
+            </a>
+            <a class="nav-link" href="#bill-payments" data-view="bill-payments">
+              <span class="nav-icon"><span class="mi">receipt_long</span></span>
+              <span class="nav-label">Bill Payments</span>
+            </a>
+
+            <div>
+              <button class="voucher-toggle" type="button" aria-expanded="false" aria-controls="voucher-submenu">
+                <span class="nav-icon"><span class="mi">confirmation_number</span></span>
+                <span class="nav-label">Voucher</span>
+                <span class="mi voucher-chevron">expand_more</span>
+              </button>
+              <div class="voucher-sub" id="voucher-submenu">
+                <a class="nav-link" href="#parkpe-voucher" data-view="parkpe-voucher">
+                  <span class="nav-icon"><span class="mi">redeem</span></span>
+                  ParkPe Voucher
+                </a>
+                <a class="nav-link" href="#brand-vouchers" data-view="brand-vouchers">
+                  <span class="nav-icon"><span class="mi">local_activity</span></span>
+                  Brand Voucher
+                </a>
+              </div>
+            </div>
+
+            <a class="nav-link" href="#qr-scan" data-view="qr-scan">
+              <span class="nav-icon"><span class="mi">qr_code_scanner</span></span>
+              <span class="nav-label">Connect QR</span>
+            </a>
+            <a class="nav-link" href="#fastag" data-view="fastag">
+              <span class="nav-icon"><span class="mi">local_shipping</span></span>
+              <span class="nav-label">FASTag</span>
+            </a>
+            <a class="nav-link" href="#pay-challan" data-view="pay-challan">
+              <span class="nav-icon"><span class="mi">request_quote</span></span>
+              <span class="nav-label">Pay challan</span>
+            </a>
+            <a class="nav-link" href="#carpool" data-view="carpool">
+              <span class="nav-icon"><span class="mi">hail</span></span>
+              <span class="nav-label">CoPilot</span>
+            </a>
+            <a class="nav-link" href="#transactions" data-view="transactions">
+              <span class="nav-icon"><span class="mi">history</span></span>
+              <span class="nav-label">Transaction History</span>
+            </a>
+            <a class="nav-link" href="#connect" data-view="connect">
+              <span class="nav-icon"><span class="mi">qr_code_2</span></span>
+              <span class="nav-label">ParkPe Connect</span>
+            </a>
+            <a class="nav-link" href="#parking" data-view="parking">
+              <span class="nav-icon"><span class="mi">local_parking</span></span>
+              <span class="nav-label">Parking desk</span>
+            </a>
+            <a class="nav-link" href="#support" data-view="support">
+              <span class="nav-icon"><span class="mi">support_agent</span></span>
+              <span class="nav-label">Support</span>
+            </a>
+            <a class="nav-link" href="#account-settings" data-view="account-settings">
+              <span class="nav-icon"><span class="mi">settings</span></span>
+              <span class="nav-label">Settings</span>
+            </a>
+          </nav>
+        </div>
+
+        <div class="sidebar-foot">
+          <section class="smart-card">
+            <div class="smart-slides" aria-hidden="true">
+              <img src="../assets/images/dashboard/car-logo.png" alt="" />
+              <img src="../assets/images/dashboard/car-parking-1.png" alt="" />
+              <img src="../assets/images/dashboard/car-parking-2.jpg" alt="" />
+              <img src="../assets/images/dashboard/car-parking-3.png" alt="" />
+            </div>
+            <div class="smart-shade" aria-hidden="true"></div>
+            <div class="smart-copy">
+              <span class="smart-kicker">SMART PARKING</span>
+              <p>Track parking access, QR scans, FASTag actions, and service history with ParkPe.</p>
+              <a class="smart-cta" href="#connect">
+                View Vehicles
+                <span class="mi">arrow_forward</span>
+              </a>
+            </div>
+          </section>
+          <button class="logout-link js-logout" type="button">
+            <span class="logout-icon"><span class="mi">logout</span></span>
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <header class="header">
+        <div class="header-inner">
+          <div class="header-start">
+            <button class="menu-btn" type="button" aria-label="Open navigation menu" aria-expanded="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+            <p class="crumb" id="crumb">Dashboard</p>
+            <div class="search">
+              <span class="search-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+              </span>
+              <input id="site-search" type="search" placeholder="Search services and vehicles" autocomplete="off" aria-label="Search services and vehicles" aria-controls="search-results" aria-expanded="false" role="combobox" />
+              <kbd><span>Ctrl</span><span>+</span><span>K</span></kbd>
+              <div class="search-results" id="search-results" role="listbox" hidden></div>
+            </div>
+          </div>
+
+          <div class="header-end">
+            <button class="icon-btn search-toggle" type="button" aria-label="Search" aria-expanded="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+              </svg>
+            </button>
+            <div class="menu-wrap">
+              <button class="icon-btn notify-btn" type="button" aria-label="Reminders" aria-expanded="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.082A2.25 2.25 0 0 0 21 13.75v-2.5a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44L11.189 7.44A1.5 1.5 0 0 0 10.129 7H6.75A2.25 2.25 0 0 0 4.5 9.25v4.5a2.25 2.25 0 0 0 1.689 2.17 23.848 23.848 0 0 0 5.454 1.082M15 17.25a3 3 0 1 1-6 0" />
+                </svg>
+                <span class="badge">2</span>
+              </button>
+              <div class="dropdown notify-menu" role="menu">
+                <div class="dropdown-head">
+                  <strong>Reminders</strong>
+                  <div>
+                    <button class="mark-read" type="button">Mark all read</button>
+                    <a href="#notifications">View all</a>
+                  </div>
+                </div>
+                <div class="notify-list"></div>
+              </div>
+            </div>
+
+            <div class="menu-wrap">
+              <button class="profile-btn" type="button" aria-label="Account menu" aria-expanded="false">
+                <span class="avatar">PU</span>
+                <span class="profile-text">
+                  <strong>ParkPe User</strong>
+                  <span>user@parkpe.in</span>
+                </span>
+                <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+              <div class="dropdown profile-menu" role="menu">
+                <a class="menu-item" href="#profile">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
+                  Profile
+                </a>
+                <a class="menu-item" href="#account-settings">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
+                  Change password
+                </a>
+                <a class="menu-item" href="#support">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
+                  Help
+                </a>
+                <hr class="menu-sep" />
+                <button class="menu-item danger js-logout" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" /></svg>
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="workspace" id="content" tabindex="-1">
+        <div class="page">
+          <div id="view-dashboard" class="page-in">
+            <section class="welcome">
+              <div class="welcome-grid">
+                <div>
+                  <h1 id="greeting">Good afternoon</h1>
+                  <p class="welcome-lead" id="welcome-summary">2 vehicles · 1 parking session due</p>
+                </div>
+                <div class="welcome-actions">
+                  <a class="pill-btn pill-white" href="#fastag"><span class="mi">directions_car</span> FASTag</a>
+                  <a class="pill-btn pill-lime" href="#qr-scan"><span class="mi">qr_code_scanner</span> Connect QR</a>
+                  <a class="pill-btn pill-green" href="#bill-payments">
+                    <img src="../assets/img/logo/b-mark.png" alt="" />
+                    Bill Payment
+                  </a>
+                </div>
+              </div>
+            </section>
+
+            <div class="split">
+              <section class="hero" aria-label="Vehicle overview">
+                <img class="hero-photo" src="../assets/images/dashboard/car-logo.png" alt="ParkPe car in a smart parking garage" />
+                <div class="hero-shade" aria-hidden="true"></div>
+                <div class="hero-copy">
+                  <span class="hub-chip">ParkPe Hub</span>
+                  <div class="carousel-nav">
+                    <button class="carousel-prev" type="button"><span class="mi">chevron_left</span> Prev</button>
+                    <button class="carousel-next" type="button">Next <span class="mi">chevron_right</span></button>
+                    <span class="slide-count">1 / 2</span>
+                  </div>
+                  <div class="hero-slide">
+                    <h2 aria-live="polite">DL 01 AB 1234</h2>
+                    <p class="hero-sub">Hyundai Creta | Polar White</p>
+                    <div class="stat-grid">
+                      <div class="stat" data-key="insurance"><small>Insurance</small><strong>12 Mar 2027</strong></div>
+                      <div class="stat is-alert" data-key="puc"><small>PUC</small><strong>Exp: 18 days</strong></div>
+                      <div class="stat" data-key="fitness"><small>Fitness</small><strong>4 Jan 2028</strong></div>
+                      <div class="stat" data-key="rc"><small>RC status</small><strong>Verified</strong></div>
+                    </div>
+                    <a class="hero-cta" href="#connect"><span class="mi">directions_car</span> Manage vehicles</a>
+                  </div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>Quick Actions</h2>
+                    <p class="muted">Most used ParkPe services</p>
+                  </div>
+                  <span class="chip">Smart Hub</span>
+                </div>
+                <div class="quick-grid">
+                  <a class="quick-action" href="#pay-challan">
+                    <span class="qa-icon tone-rose"><span class="mi">request_quote</span></span>
+                    <span>Challan Payment</span>
+                  </a>
+                  <a class="quick-action" href="#carpool">
+                    <span class="qa-icon tone-violet"><span class="mi">hail</span></span>
+                    <span>CoPilot</span>
+                  </a>
+                  <a class="quick-action" href="#brand-vouchers">
+                    <span class="qa-icon tone-pink"><span class="mi">redeem</span></span>
+                    <span>Brand Vouchers</span>
+                  </a>
+                  <a class="quick-action" href="#parkpe-voucher">
+                    <span class="qa-icon tone-pink"><span class="mi">local_activity</span></span>
+                    <span>Parkpe Vouchers</span>
+                  </a>
+                  <a class="quick-action" href="#bill-payments">
+                    <span class="qa-icon tone-blue"><img src="../assets/img/logo/b-mark.png" alt="" /></span>
+                    <span>Bill Payments</span>
+                  </a>
+                  <a class="quick-action" href="#qr-scan">
+                    <span class="qa-icon tone-mint"><span class="mi">qr_code_scanner</span></span>
+                    <span>Connect QR</span>
+                  </a>
+                  <a class="quick-action" href="#fastag">
+                    <span class="qa-icon tone-lime"><span class="mi">directions_car</span></span>
+                    <span>FASTag Recharge</span>
+                  </a>
+                </div>
+              </section>
+            </div>
+
+            <div class="lower">
+              <section class="card">
+                <div class="card-head">
+                  <div>
+                    <h2>Recent parking sessions</h2>
+                    <p class="card-lead">Latest activity across your vehicles</p>
+                  </div>
+                  <a class="app-link" href="#transactions">View all</a>
+                </div>
+                <div class="table-wrap">
+                  <div class="table">
+                    <div class="table-head">
+                      <span>Vehicle</span>
+                      <span>Location</span>
+                      <span>Duration</span>
+                      <span>Status</span>
+                    </div>
+                    <div class="table-row">
+                      <strong>DL 01 AB 1234</strong>
+                      <span>Cyber Hub, Gurugram</span>
+                      <span>2h 15m</span>
+                      <span class="status status-active">Active</span>
+                    </div>
+                    <div class="table-row">
+                      <strong>HR 26 DK 9081</strong>
+                      <span>DLF Cyber City</span>
+                      <span>45m</span>
+                      <span class="status status-paid">Paid</span>
+                    </div>
+                    <div class="table-row is-due">
+                      <strong>DL 8C AX 4410</strong>
+                      <span>Select Citywalk</span>
+                      <span>1h</span>
+                      <span class="status status-due">Due</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="card">
+                <h3>Scan &amp; Pay</h3>
+                <p class="scan-copy">Scan any QR code to pay for parking, merchant, or any other service.</p>
+                <div class="scan-art">
+                  <img src="../assets/images/dashboard/qr_mobile.png" alt="Scan QR code with ParkPe" width="498" height="358" />
+                </div>
+                <a class="scan-btn" href="#qr-scan"><span class="mi">qr_code_scanner</span> Open Scanner</a>
+              </section>
+            </div>
+          </div>
+
+          <div id="view-service" hidden></div>
+        </div>
+
+        <footer class="footer">
+          <div class="footer-inner">
+            <div class="footer-grid">
+              <section class="footer-brand">
+                <img src="../assets/img/logo/parkpe_logo.png" alt="ParkPe" />
+                <h2>Smart Parking. Simplified Living.</h2>
+                <p>Manage smart parking, FASTag recharge, QR payments, challan payments, and everyday bill services in one place.</p>
+              </section>
+              <section>
+                <h2>Services</h2>
+                <nav class="footer-links">
+                  <a href="#parking">Book Parking</a>
+                  <a href="#fastag">FASTag Recharge</a>
+                  <a href="#pay-challan">Pay Challan</a>
+                  <a href="#bill-payments">Bill Payments</a>
+                  <a href="#bill-payments">Mobile Recharge</a>
+                  <a href="#qr-scan">QR Scan &amp; Pay</a>
+                </nav>
+              </section>
+              <section>
+                <h2>Support</h2>
+                <nav class="footer-links">
+                  <a href="#support">Help Center</a>
+                  <a href="#support">How It Works</a>
+                  <a href="#support">FAQs</a>
+                  <a href="#support">Terms &amp; Conditions</a>
+                  <a href="#support">Privacy Policy</a>
+                  <a href="#support">Grievance Redressal</a>
+                </nav>
+              </section>
+              <section>
+                <h2>Contact Us</h2>
+                <div class="contact">
+                  <a href="tel:18001234567">
+                    <span class="contact-icon"><span class="mi">call</span></span>
+                    <span><strong>1800-123-4567</strong><small>(Toll Free)</small></span>
+                  </a>
+                  <a href="mailto:support@parkpe.in">
+                    <span class="contact-icon"><span class="mi">mail</span></span>
+                    <strong>support@parkpe.in</strong>
+                  </a>
+                  <div class="contact-row">
+                    <span class="contact-icon"><span class="mi">location_on</span></span>
+                    <span><strong>ParkPe Technologies Pvt. Ltd.</strong><small>Gurugram, Haryana, India - 122001</small></span>
+                  </div>
+                </div>
+              </section>
+            </div>
+            <div class="footer-base">
+              <div class="secure">
+                <span class="contact-icon"><span class="mi">verified_user</span></span>
+                <div>
+                  <strong>100% Secure Payments</strong>
+                  <span>Your data is safe with us</span>
+                </div>
+              </div>
+              <p class="copy">© 2026 ParkPe. Smart Parking, FASTag, QR Scan &amp; Bill Payments Platform.</p>
+            </div>
+          </div>
+        </footer>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <script src="../js/screens.js?v=16"></script>
+    <script src="../js/dashboard.js?v=15"></script>
+  </body>
+</html>

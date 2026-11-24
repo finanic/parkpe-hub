@@ -1,0 +1,28 @@
+---
+description: Keep ParkPe, PaySwap, and the shared backend in their own folders.
+globs: apps/parkpe/**,apps/payswap/**,apps/backend/**,packages/**,dev.py,Makefile
+alwaysApply: false
+---
+
+# Folder boundaries
+
+`AGENTS.md` is the baseline. This rule applies while editing the two apps, the shared API, or the process wiring.
+
+- ParkPe stays in `apps/parkpe/` (`serve.py`, `js/`, `css/`, `dashboard/`, `core/`, `shared/`, `features/parking`, `features/fastag`, `features/carpool`, `features/qr-connect`). PaySwap stays in `apps/payswap/` (`serve.py`, `js/`, `css/`, `core/`, `shared/`, `features/cards`, `features/vouchers`, `features/bbps`, `features/transactions`). Neither feature tree imports the other.
+- Shared DTOs stay in `packages/contracts`. The shared client stays in `packages/sdk-client` (`X-App-Context`). Token names stay in `packages/ui-tokens`. The API stays in `apps/backend` (`auth/` for port 4600, `config/` and `api/v1/` for port 4610). `domain/parkpe` and `domain/payswap` do not import each other.
+- Shared paths, cookies, roles, and `X-Auth-Request` stay in `apps/backend/auth/contract.py`. HTTP stays in `apps/backend/auth/server.py`. Primitives stay in `apps/backend/auth/security.py`. Persistence stays in `apps/backend/auth/store.py`. The operator UI stays in `apps/backend/auth/console/`.
+- `apps/payswap/js/session.js` sends `retailer` and must not be loaded by `apps/parkpe/`. A ParkPe client sends `customer` from `apps/parkpe/js/`. The console sends `operator`.
+- `dev.py` and `Makefile` only start processes. Product behavior does not go there.
+- Do not add a file for a future feature, reformat a neighboring screen, or move a working module as part of an unrelated fix.
+
+Name the other side when a call leaves the file:
+
+```javascript
+/* Consumes apps/backend/auth/contract.py Paths via POST /api/auth/login.
+   Role stays retailer. apps/parkpe/ must not load this file. */
+```
+
+```python
+# Allowlist for apps/parkpe/serve.py (:4310) and apps/payswap/serve.py (:4500).
+# Role check, not the cookie jar, separates customer from retailer.
+```

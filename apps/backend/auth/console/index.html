@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Backend · Sign in</title>
+    <link rel="stylesheet" href="/console.css?v=2" />
+  </head>
+  <body>
+    <div class="stage">
+      <div class="wash" aria-hidden="true"></div>
+      <div class="shell">
+        <aside class="story">
+          <p class="brand">
+            <span class="seal" aria-hidden="true">
+              <svg viewBox="0 0 32 32" width="22" height="22">
+                <path fill="currentColor" d="M16 2.5 5 7v8.2c0 6.6 4.4 11.6 11 13.3 6.6-1.7 11-6.7 11-13.3V7L16 2.5Zm0 3.2 8.2 3.4v6.6c0 5-3.2 8.9-8.2 10.4-5-1.5-8.2-5.4-8.2-10.4V9.1L16 5.7Zm-1 6.2v3.2h-2.2v2.2H15v3.2h2.2v-3.2H19.4v-2.2H17.2v-3.2H15Z"/>
+              </svg>
+            </span>
+            Backend
+          </p>
+          <h2>The operator door.</h2>
+          <p class="aside-lead">This console belongs to one operator. The authenticator has to match before anything inside opens.</p>
+          <ul class="facts">
+            <li>Created once, then signup closes</li>
+            <li>Password and code, both required</li>
+            <li>Retailer and customer stay on their apps</li>
+          </ul>
+          <p class="aside-foot">Auth service · local console</p>
+        </aside>
+        <main class="panel">
+          <form id="login" data-view="login">
+            <p class="mark">Sign in</p>
+            <h1>Operator access</h1>
+            <p class="lead">Use the operator email. A retailer or customer password will not open this console.</p>
+            <label>Email<input name="email" type="email" autocomplete="username" spellcheck="false" required /></label>
+            <label>Password
+              <span class="field">
+                <input name="password" type="password" autocomplete="current-password" required />
+                <button class="reveal" type="button" data-reveal aria-label="Show password">Show</button>
+              </span>
+            </label>
+            <p class="error" data-error hidden></p>
+            <button type="submit">Sign in</button>
+            <button class="text" type="button" data-show="register" hidden>Create the operator account</button>
+          </form>
+          <form id="register" data-view="register" hidden>
+            <p class="mark">First operator</p>
+            <h1>Create the account</h1>
+            <p class="lead">This can be done once. Use 12 or more characters, and keep the email out of the password.</p>
+            <label>Email<input name="email" type="email" autocomplete="username" spellcheck="false" required /></label>
+            <label>Password
+              <span class="field">
+                <input name="password" type="password" autocomplete="new-password" minlength="12" required />
+                <button class="reveal" type="button" data-reveal aria-label="Show password">Show</button>
+              </span>
+            </label>
+            <p class="error" data-error hidden></p>
+            <button type="submit">Create operator</button>
+            <button class="text" type="button" data-show="login">I already have an account</button>
+          </form>
+          <form id="mfa" data-view="mfa" hidden>
+            <p class="mark">Second step</p>
+            <h1>Authenticator code</h1>
+            <p class="lead">Enter the 6-digit code from the app, or one unused backup code.</p>
+            <label>Code<input name="code" inputmode="numeric" autocomplete="one-time-code" required /></label>
+            <p class="error" data-error hidden></p>
+            <button type="submit">Continue</button>
+          </form>
+          <section id="enroll" data-view="enroll" hidden>
+            <p class="mark">Setup</p>
+            <h1>Turn on the authenticator</h1>
+            <p class="lead">Add the key in an authenticator app. This console stays closed until a code matches.</p>
+            <button type="button" id="start-enroll">Generate key</button>
+            <p class="kicker" data-secret-label hidden>Setup key</p>
+            <p class="secret" data-secret hidden></p>
+            <p class="kicker" data-codes-label hidden>Backup codes</p>
+            <p class="secret codes" data-codes hidden></p>
+            <form id="enroll-confirm">
+              <label>Code from the app<input name="code" inputmode="numeric" autocomplete="one-time-code" required /></label>
+              <p class="error" data-error hidden></p>
+              <button type="submit">Enable and enter</button>
+            </form>
+          </section>
+          <section id="home" data-view="home" hidden>
+            <p class="mark">Session</p>
+            <h1>Signed in</h1>
+            <p class="lead" id="who"></p>
+            <button type="button" id="logout">Sign out</button>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script src="/console.js?v=2"></script>
+  </body>
+</html>
