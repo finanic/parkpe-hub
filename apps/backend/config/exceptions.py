@@ -1,8 +1,8 @@
 """JSON errors use the codes in packages/contracts/index.js ErrorCode.
 
-validation, unauthenticated, forbidden_app, idempotency_conflict.
+validation, unauthenticated, forbidden_app, idempotency_conflict, server_error.
 DRF's default `detail` envelope is rewritten so apps/parkpe and apps/payswap
-can read one shape.
+can read one shape. An uncaught /api/ failure uses server_error and no traceback.
 """
 
 from __future__ import annotations
@@ -50,4 +50,7 @@ class ApiErrorEnvelopeMiddleware:
         except Exception:
             if not request.path.startswith("/api/"):
                 raise
-            return JsonResponse({"error": "Something went wrong."}, status=500)
+            return JsonResponse(
+                {"error": "Something went wrong.", "code": "server_error"},
+                status=500,
+            )

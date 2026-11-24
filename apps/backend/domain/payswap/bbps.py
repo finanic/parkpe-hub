@@ -1,6 +1,6 @@
-"""Record a BBPS collection.
+"""Record a BBPS collection. Not wired to any /api/v1 route.
 
-Not mounted. The routed PaySwap call is POST /api/v1/payswap/vouchers/order
+The mounted PaySwap call is POST /api/v1/payswap/vouchers/order
 (domain/payswap/vouchers.py, api/v1/routes/payswap.py).
 App caller: apps/payswap/features/bbps, context payswap, role retailer.
 Downstream: integrations/bbps.py. Does not import domain/parkpe.

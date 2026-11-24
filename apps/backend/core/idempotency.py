@@ -12,8 +12,9 @@ key with a different body is 409 idempotency_conflict (packages/contracts
 ErrorCode). A missing key is 400 validation.
 
 The row is locked with select_for_update inside transaction.atomic, and
-the domain call stays inside that transaction. A concurrent retry blocks
-until the first commit, then reads the stored response. This is not the
+the domain call stays inside that transaction. Postgres waits on that lock.
+SQLite can raise OperationalError while the first write is still open;
+run_once retries and then reads the stored response. This is not the
 refresh-cookie rule in apps/backend/auth/server.py.
 """
 
@@ -21,9 +22,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from decimal import Decimal
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, OperationalError, transaction
 from rest_framework.exceptions import APIException
 
 IDEMPOTENCY_HEADER = "Idempotency-Key"
@@ -45,10 +47,20 @@ def run_once(*, app_context: str, user_id: str, endpoint: str, key: str, body_ha
     cleaned = (key or "").strip()
     if not cleaned or len(cleaned) > 200 or any(char.isspace() for char in cleaned):
         raise IdempotencyProblem("Send an Idempotency-Key.", "validation", 400)
-    try:
-        return _locked(app_context, user_id, endpoint, cleaned, body_hash, produce)
-    except IntegrityError:
-        return _locked(app_context, user_id, endpoint, cleaned, body_hash, produce)
+    locked = None
+    for _ in range(40):
+        try:
+            return _locked(app_context, user_id, endpoint, cleaned, body_hash, produce)
+        except IntegrityError:
+            continue
+        except OperationalError as exc:
+            if "locked" not in str(exc).lower():
+                raise
+            locked = exc
+            time.sleep(0.01)
+    if locked is not None:
+        raise locked
+    return _locked(app_context, user_id, endpoint, cleaned, body_hash, produce)
 
 
 def _locked(app_context, user_id, endpoint, key, body_hash, produce):

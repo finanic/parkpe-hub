@@ -1,10 +1,12 @@
-/* PaySwap app barrel.
+/* PaySwap app barrel. Re-exports core/, shared/, and features/.
 
-   Mounts core/, shared/, and features/ (cards, vouchers, bbps, transactions).
-   Calls apps/backend through packages/sdk-client with X-App-Context: payswap.
+   The page that calls Django is apps/payswap/js/hub.js, with
+   X-App-Context: payswap through packages/sdk-client.
+   POST /api/v1/payswap/vouchers/order is apps/backend/api/v1/routes/payswap.py.
+   Sign-in stays in apps/payswap/js/session.js on port 4600.
    DTOs: packages/contracts. Tokens: packages/ui-tokens.
    Does not import apps/parkpe or apps/parkpe/js/screens.js.
-   apps/payswap/serve.py does not load this file. Live client: apps/payswap/js/session.js.
+   apps/payswap/serve.py serves this folder.
 */
 
 export { core } from "./core/index.js";

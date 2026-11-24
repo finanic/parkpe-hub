@@ -1,3 +1,9 @@
+/* ParkPe dashboard shell for apps/parkpe/dashboard/index.html.
+
+   Vehicle slides and menus. Screen HTML comes from apps/parkpe/js/screens.js
+   (window.ParkpeScreens). Does not call apps/backend, and must not load
+   apps/payswap/js/session.js.
+*/
 const slides = [
   {
     reg: "DL 01 AB 1234",

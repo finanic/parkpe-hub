@@ -1,3 +1,11 @@
+/* PaySwap counter screens for apps/payswap/index.html.
+
+   AEPS, DMT, recharge, bills, wallet, and transactions stay on this page.
+   vouchers() posts through apps/payswap/js/hub.js
+   (POST /api/v1/payswap/vouchers/order). Sign-in stays in
+   apps/payswap/js/session.js on port 4600 with role retailer
+   (apps/backend/auth/contract.py). ParkPe must not load this file.
+*/
 (function () {
   const mk = (id) => `https://static.mobikwik.com/appdata/operator_icons/op${id}.png`;
   const cf = (name) => `https://cashfreelogo.cashfree.com/assets_images/pg/nb/64/${name}.png`;
@@ -362,13 +370,33 @@
       </div>`;
   }
 
-  const screens = { home, aeps, dmt, recharge, bills, wallet, transactions, support };
+  function vouchers() {
+    return `
+      <div class="screen">
+        <header class="page-head">
+          <div>
+            <p class="kicker">Vouchers</p>
+            <h1>Brand voucher</h1>
+          </div>
+          <p>Starts the order on the hub. Sign-in for this counter stays on port 4600.</p>
+        </header>
+        <form class="card fields" data-voucher-form>
+          <label class="field">Brand<input name="brand" required placeholder="Amazon" autocomplete="off" /></label>
+          <label class="field">Amount<input name="amount" inputmode="decimal" required placeholder="100.00" /></label>
+          <button class="btn yellow" type="submit">Order voucher</button>
+          <p class="hint" data-voucher-status hidden></p>
+        </form>
+      </div>`;
+  }
+
+  const screens = { home, aeps, dmt, recharge, bills, vouchers, wallet, transactions, support };
   const titles = {
     home: "Home",
     aeps: "AEPS",
     dmt: "DMT",
     recharge: "Recharges",
     bills: "Bill pay",
+    vouchers: "Vouchers",
     wallet: "Float",
     transactions: "Transactions",
     support: "Support",

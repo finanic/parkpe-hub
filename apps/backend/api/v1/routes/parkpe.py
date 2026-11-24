@@ -1,6 +1,6 @@
 """POST /api/v1/parkpe/sessions/initiate
 
-Caller: apps/parkpe/features/qr-connect through packages/sdk-client
+Caller: apps/parkpe/js/hub.js through features/qr-connect and packages/sdk-client
 (X-App-Context: parkpe, role customer from packages/contracts).
 parkpe_only rejects a payswap context with 403 before the domain runs.
 Auth cookie is checked by api/v1/deps.py against GET /api/auth/me.

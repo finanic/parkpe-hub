@@ -227,7 +227,7 @@
     }
   });
 
-  view.addEventListener("submit", (event) => {
+  view.addEventListener("submit", async (event) => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
     event.preventDefault();
@@ -268,6 +268,26 @@
         ["IFSC", data.get("ifsc")],
         ["Amount", rupee(data.get("amount"))],
       ]);
+      return;
+    }
+
+    if (form.matches("[data-voucher-form]")) {
+      const status = form.querySelector("[data-voucher-status]");
+      status.hidden = false;
+      if (!globalThis.PayswapHub) {
+        status.textContent = "The hub client is still loading.";
+        return;
+      }
+      const result = await globalThis.PayswapHub.orderVoucher(
+        {
+          brand: String(data.get("brand") || "").trim(),
+          amount: String(data.get("amount") || "").trim(),
+        },
+        crypto.randomUUID(),
+      );
+      status.textContent = result.ok
+        ? `Order ${result.data.reference} is ${result.data.state}.`
+        : result.error;
       return;
     }
 

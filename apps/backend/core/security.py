@@ -18,10 +18,11 @@ import os
 import urllib.error
 import urllib.request
 
+from auth.contract import ACCESS_COOKIE
 from domain.common.scope import ROLE_FOR_CONTEXT, BadContext, parse_context
 
-# apps/backend/auth/contract.py ACCESS_COOKIE and HEADER. Issued on port 4600.
-ACCESS_COOKIE = "auth_access"
+# Header and /api/auth/me path from apps/backend/auth/contract.py. Cookie name
+# is ACCESS_COOKIE in that file, issued on port 4600.
 AUTH_REQUEST_HEADER = "X-Auth-Request"
 AUTH_ME_PATH = "/api/auth/me"
 

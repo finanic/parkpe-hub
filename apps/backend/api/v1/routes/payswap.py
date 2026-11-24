@@ -1,6 +1,6 @@
 """POST /api/v1/payswap/vouchers/order
 
-Caller: apps/payswap/features/vouchers through packages/sdk-client
+Caller: apps/payswap/js/hub.js through features/vouchers and packages/sdk-client
 (X-App-Context: payswap, role retailer from packages/contracts).
 payswap_only rejects a parkpe context with 403 before the domain runs.
 Auth cookie is checked by api/v1/deps.py against GET /api/auth/me.

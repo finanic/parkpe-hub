@@ -23,4 +23,12 @@ export const ErrorCode = Object.freeze({
   FORBIDDEN_APP: "forbidden_app",
   VALIDATION: "validation",
   IDEMPOTENCY_CONFLICT: "idempotency_conflict",
+  SERVER_ERROR: "server_error",
+});
+
+/* Django routes on port 4610. packages/sdk-client sends these.
+   Auth paths stay in apps/backend/auth/contract.py and are not listed here. */
+export const HubPath = Object.freeze({
+  PARKPE_SESSION_INITIATE: "/api/v1/parkpe/sessions/initiate",
+  PAYSWAP_VOUCHER_ORDER: "/api/v1/payswap/vouchers/order",
 });

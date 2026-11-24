@@ -1,6 +1,6 @@
-"""Hold a parking bay.
+"""Hold a parking bay. Not wired to any /api/v1 route.
 
-Not mounted. The routed ParkPe call is POST /api/v1/parkpe/sessions/initiate
+The mounted ParkPe call is POST /api/v1/parkpe/sessions/initiate
 (domain/parkpe/sessions.py, api/v1/routes/parkpe.py).
 App caller: apps/parkpe/features/parking, context parkpe, role customer.
 Downstream: integrations/parking.py. Does not import domain/payswap.

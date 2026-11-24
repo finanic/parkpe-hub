@@ -12,7 +12,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from rest_framework.test import APIClient
 
 from core.security import fetch_session
@@ -120,6 +120,35 @@ class ScopedRouteTests(TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertEqual(response["Access-Control-Allow-Origin"], "http://127.0.0.1:4310")
 
+    def test_foreign_origin_post_does_not_mutate(self):
+        # config/cors.py rejects this before api/v1/deps.py and the domain.
+        self.client.cookies["auth_access"] = "customer-token"
+        with patch("api.v1.routes.parkpe.initiate_session", wraps=parkpe_sessions.initiate_session) as start:
+            response = self.client.post(
+                "/api/v1/parkpe/sessions/initiate",
+                {"site_code": "HUB1", "bay": "A1", "vehicle": "DL01AB1234"},
+                format="json",
+                HTTP_X_APP_CONTEXT="parkpe",
+                HTTP_IDEMPOTENCY_KEY="key-csrf",
+                HTTP_ORIGIN="http://127.0.0.1:9999",
+            )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["code"], "forbidden_app")
+        self.assertEqual(start.call_count, 0)
+
+    def test_allowlisted_origin_can_initiate(self):
+        self.client.cookies["auth_access"] = "customer-token"
+        response = self.client.post(
+            "/api/v1/parkpe/sessions/initiate",
+            {"site_code": "HUB1", "bay": "A1", "vehicle": "DL01AB1234"},
+            format="json",
+            HTTP_X_APP_CONTEXT="parkpe",
+            HTTP_IDEMPOTENCY_KEY="key-origin-ok",
+            HTTP_ORIGIN="http://127.0.0.1:4310",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response["Access-Control-Allow-Origin"], "http://127.0.0.1:4310")
+
     def _session(self, context, key, bay="A1"):
         headers = {"HTTP_IDEMPOTENCY_KEY": key}
         if context is not None:
@@ -170,3 +199,95 @@ class AuthMeClientTests(SimpleTestCase):
         self.assertEqual(seen["path"], "/api/auth/me")
         self.assertEqual(seen["header"], "1")
         self.assertEqual(seen["cookie"], "auth_access=abc")
+
+
+class OverlappingIdempotencyTests(TransactionTestCase):
+    """Two in-flight posts share one Idempotency-Key.
+
+    The second connection has to read the row core/idempotency.py commits
+    inside transaction.atomic (select_for_update). SQLite needs a busy
+    timeout so that wait becomes a retry instead of an immediate lock error.
+    """
+
+    def setUp(self):
+        self.patcher = patch("api.v1.deps.fetch_session", side_effect=session_for)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+    def test_overlapping_duplicate_runs_domain_once(self):
+        from django.db import connection
+        from django.db import connections
+
+        import core.idempotency as idempotency
+
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+        connection.close()
+
+        in_produce = threading.Event()
+        release = threading.Event()
+        overlap = threading.Event()
+        domain_calls = []
+        producer = []
+        real_locked = idempotency._locked
+
+        def counting_locked(*args, **kwargs):
+            if in_produce.is_set() and producer and threading.get_ident() != producer[0]:
+                overlap.set()
+            return real_locked(*args, **kwargs)
+
+        def slow(**kwargs):
+            producer.append(threading.get_ident())
+            domain_calls.append(1)
+            in_produce.set()
+            if not release.wait(5):
+                raise TimeoutError("overlap release timed out")
+            return parkpe_sessions.initiate_session(**kwargs)
+
+        def worker(box):
+            connections.close_all()
+            local = connections["default"]
+            with local.cursor() as cursor:
+                cursor.execute("PRAGMA busy_timeout=5000")
+            client = APIClient()
+            client.cookies["auth_access"] = "customer-token"
+            try:
+                box.append(
+                    client.post(
+                        "/api/v1/parkpe/sessions/initiate",
+                        {"site_code": "HUB1", "bay": "A1", "vehicle": "DL01AB1234"},
+                        format="json",
+                        HTTP_X_APP_CONTEXT="parkpe",
+                        HTTP_IDEMPOTENCY_KEY="key-overlap",
+                    )
+                )
+            finally:
+                connections.close_all()
+
+        boxes = [[], []]
+        threads = []
+        try:
+            with patch("core.idempotency._locked", side_effect=counting_locked), patch(
+                "api.v1.routes.parkpe.initiate_session",
+                side_effect=slow,
+            ):
+                threads = [threading.Thread(target=worker, args=(box,)) for box in boxes]
+                for thread in threads:
+                    thread.start()
+                self.assertTrue(in_produce.wait(5))
+                self.assertTrue(overlap.wait(5))
+                release.set()
+                for thread in threads:
+                    thread.join(5)
+                    self.assertFalse(thread.is_alive())
+        finally:
+            release.set()
+            for thread in threads:
+                thread.join(5)
+
+        self.assertEqual(len(domain_calls), 1)
+        self.assertEqual([len(box) for box in boxes], [1, 1])
+        self.assertEqual(boxes[0][0].status_code, 201)
+        self.assertEqual(boxes[1][0].status_code, 201)
+        self.assertEqual(boxes[0][0].json(), boxes[1][0].json())
