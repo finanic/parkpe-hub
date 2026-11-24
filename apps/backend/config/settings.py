@@ -27,6 +27,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "config.request.RequestContextMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "config.cors.FrontendOriginMiddleware",
     "config.exceptions.ApiErrorEnvelopeMiddleware",

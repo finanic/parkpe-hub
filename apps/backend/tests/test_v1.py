@@ -16,6 +16,10 @@ from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from rest_framework.test import APIClient
 
 from core.security import fetch_session
+
+
+def _log_record(line: str) -> dict:
+    return json.loads(line.split(":", 2)[-1])
 from domain.parkpe import sessions as parkpe_sessions
 from domain.payswap import vouchers as payswap_vouchers
 
@@ -24,7 +28,7 @@ def session_for(token: str) -> dict:
     known = {
         "customer-token": {"email": "driver@parkpe.test", "role": "customer"},
         "retailer-token": {"email": "shop@payswap.test", "role": "retailer"},
-        "operator-token": {"email": "ops@hub.test", "role": "operator"},
+        "admin-token": {"email": "ops@hub.test", "role": "admin"},
     }
     if token not in known:
         from core.security import SessionRejected
@@ -148,6 +152,90 @@ class ScopedRouteTests(TestCase):
         )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response["Access-Control-Allow-Origin"], "http://127.0.0.1:4310")
+
+    def test_session_log_keeps_context_and_drops_the_cookie(self):
+        self.client.cookies["auth_access"] = "customer-token"
+        with self.assertLogs("hub.actions", level="INFO") as captured:
+            response = self._session("parkpe", "key-log")
+        self.assertEqual(response.status_code, 201)
+        lines = [_log_record(item) for item in captured.output]
+        http = next(line for line in lines if line["action"] == "parkpe.session.initiate")
+        self.assertEqual(http["app_context"], "parkpe")
+        self.assertEqual(http["actor"], "driver@parkpe.test")
+        self.assertEqual(http["role"], "customer")
+        self.assertEqual(http["idempotency_key"], "key-log")
+        self.assertEqual(http["outcome"], "ok")
+        self.assertEqual(http["status"], 201)
+        self.assertTrue(http["request_id"])
+        self.assertTrue(http["target_id"].startswith("sess-"))
+        self.assertGreaterEqual(http["duration_ms"], 0)
+        self.assertTrue(any(line["action"] == "domain.parkpe.session.initiate" for line in lines))
+        blob = "\n".join(captured.output)
+        self.assertNotIn("customer-token", blob)
+        self.assertNotIn("auth_access", blob)
+        self.assertNotIn("DL01AB1234", blob)
+
+    def test_caller_request_id_is_kept_on_the_action_line(self):
+        self.client.cookies["auth_access"] = "customer-token"
+        with self.assertLogs("hub.actions", level="INFO") as captured:
+            response = self.client.post(
+                "/api/v1/parkpe/sessions/initiate",
+                {"site_code": "HUB1", "bay": "A1", "vehicle": "DL01AB1234"},
+                format="json",
+                HTTP_X_APP_CONTEXT="parkpe",
+                HTTP_IDEMPOTENCY_KEY="key-request-id",
+                HTTP_X_REQUEST_ID="req-client-1",
+            )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response["X-Request-Id"], "req-client-1")
+        lines = [_log_record(item) for item in captured.output]
+        http = next(line for line in lines if line["action"] == "parkpe.session.initiate")
+        self.assertEqual(http["request_id"], "req-client-1")
+        self.assertNotIn("customer-token", "\n".join(captured.output))
+
+    def test_redact_drops_secrets_from_the_action_line(self):
+        from core.actions import bind_action, log_action, redact, reset_action
+
+        cleaned = redact(
+            {
+                "password": "hunter2",
+                "cookie": "auth_access=sekret",
+                "otp": "123456",
+                "token": "raw-token",
+                "secret": "top",
+                "body": {"vehicle": "DL01AB1234"},
+                "site_code": "HUB1",
+            }
+        )
+        self.assertEqual(cleaned, {"site_code": "HUB1"})
+        reset_action()
+        bind_action(
+            request_id="req-log-1",
+            app_context="parkpe",
+            actor="driver@parkpe.test",
+            role="customer",
+            idempotency_key="key-safe",
+        )
+        try:
+            with self.assertLogs("hub.actions", level="INFO") as captured:
+                log_action(
+                    action="parkpe.session.initiate",
+                    outcome="error",
+                    status=400,
+                    duration_ms=3,
+                    target_id="sess-1",
+                    error_code="validation",
+                    error_reason="auth_access=sekret Bearer abc.def password=hunter2 otp=123456 token=raw-token secret=top",
+                )
+        finally:
+            reset_action()
+        text = "\n".join(captured.output)
+        for secret in ("sekret", "hunter2", "123456", "raw-token", "abc.def"):
+            self.assertNotIn(secret, text)
+        self.assertIn("[redacted]", text)
+        self.assertIn("key-safe", text)
+        self.assertIn("req-log-1", text)
+        self.assertIn("validation", text)
 
     def _session(self, context, key, bay="A1"):
         headers = {"HTTP_IDEMPOTENCY_KEY": key}

@@ -22,18 +22,7 @@
         <label class="field">Password<input name="password" type="password" autocomplete="current-password" required /></label>
         <p class="error" data-auth-error hidden></p>
         <button class="btn yellow block" type="submit">Sign in</button>
-        <button class="linkish" type="button" data-show="register">Create a retailer account</button>
-      </form>
-      <form class="gate-card" id="auth-register" data-gate="register" hidden autocomplete="on">
-        <img src="assets/payswap-logo.svg" alt="PaySwap" />
-        <p class="kicker">New outlet</p>
-        <h1>Create account</h1>
-        <p>Use 12 or more characters. The authenticator step comes right after this.</p>
-        <label class="field">Email<input name="email" type="email" autocomplete="username" required /></label>
-        <label class="field">Password<input name="password" type="password" autocomplete="new-password" minlength="12" required /></label>
-        <p class="error" data-auth-error hidden></p>
-        <button class="btn yellow block" type="submit">Create account</button>
-        <button class="linkish" type="button" data-show="login">I already have an account</button>
+        <p>An admin opens this retailer account on the operator console. This counter only signs that account in.</p>
       </form>
       <form class="gate-card" id="auth-mfa" data-gate="mfa" hidden>
         <p class="kicker">Second step</p>
@@ -104,7 +93,7 @@
     <div class="toast" id="toast" role="status" hidden></div>
     <script type="module" src="js/hub.js?v=1"></script>
     <script src="js/services.js?v=2"></script>
-    <script src="js/session.js?v=1"></script>
-    <script src="js/app.js?v=4"></script>
+    <script type="module" src="js/session.js?v=4"></script>
+    <script type="module" src="js/app.js?v=7"></script>
   </body>
 </html>

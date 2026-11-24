@@ -1,9 +1,9 @@
 """Which account role may enter which app.
 
-packages/contracts Role: customer, retailer, operator.
+packages/contracts Role: customer, retailer, admin.
 apps/backend/auth/contract.py uses the same three strings.
 customer is ParkPe (apps/parkpe). retailer is PaySwap (apps/payswap).
-operator stays on apps/backend/auth/console and is not a context here.
+admin stays on apps/backend/auth/console and is not a context here.
 """
 
 from __future__ import annotations

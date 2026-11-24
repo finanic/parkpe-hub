@@ -2,9 +2,11 @@
 
    Consumers: apps/parkpe, apps/payswap, packages/sdk-client,
    and apps/backend/schemas (same field names).
-   Live constants that already ship: apps/backend/auth/contract.py
-   (Paths, cookies, ROLE_CUSTOMER, ROLE_RETAILER, ROLE_OPERATOR, X-Auth-Request).
-   Do not copy those into either frontend.
+   Live auth names stay in apps/backend/auth/contract.py
+   (Paths, cookies, ROLE_CUSTOMER, ROLE_RETAILER, ROLE_ADMIN, X-Auth-Request).
+   Role below is the shared spelling of those three role strings.
+   apps/parkpe/js/session.js and apps/payswap/js/session.js import it.
+   Auth paths are not listed here, so this file cannot drift from Paths.
 */
 
 export const AppContext = Object.freeze({
@@ -15,7 +17,7 @@ export const AppContext = Object.freeze({
 export const Role = Object.freeze({
   CUSTOMER: "customer",
   RETAILER: "retailer",
-  OPERATOR: "operator",
+  ADMIN: "admin",
 });
 
 export const ErrorCode = Object.freeze({

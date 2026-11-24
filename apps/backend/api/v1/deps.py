@@ -5,7 +5,7 @@ payswap from apps/payswap. A domain/parkpe handler rejects payswap.
 A domain/payswap handler rejects parkpe.
 
 This header does not replace the role check in apps/backend/auth/server.py
-(customer, retailer, operator) or the AUTH_ORIGINS allowlist. apps/backend/run.py
+(customer, retailer, admin) or the AUTH_ORIGINS allowlist. apps/backend/run.py
 does not mount this module.
 
 AppContextAuthentication calls core.security.fetch_session, which GETs

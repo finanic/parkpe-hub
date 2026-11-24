@@ -6,6 +6,7 @@ parkpe_only rejects a payswap context with 403 before the domain runs.
 Auth cookie is checked by api/v1/deps.py against GET /api/auth/me.
 Body: schemas.SessionInitiateSerializer.
 Service: domain/parkpe/sessions.py. Retry: core/idempotency.py.
+Result line: core/actions.py action parkpe.session.initiate.
 """
 
 from api.v1.deps import parkpe_only
@@ -27,4 +28,5 @@ class SessionInitiateView(APIView):
                 bay=data["bay"],
                 vehicle=data["vehicle"],
             ),
+            action="parkpe.session.initiate",
         )

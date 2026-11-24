@@ -9,7 +9,9 @@ A POST, PUT, or PATCH under /api/v1 from a foreign Origin is refused here,
 before api/v1/deps.py. A form on another port of 127.0.0.1 can still carry
 the auth_access cookie (SameSite=Lax, path /) and cannot set X-App-Context.
 deps.py still requires that header, so an allowlisted page that omits it
-never reaches domain/parkpe or domain/payswap.
+never reaches domain/parkpe or domain/payswap. packages/sdk-client also
+sends X-Request-Id. config/request.py keeps that value for core/actions.py
+only when it is a short token.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from django.http import HttpResponse, JsonResponse
 
 from config.settings import FRONTEND_ORIGINS
 
-ALLOW_HEADERS = "Content-Type, X-App-Context, X-Auth-Request, Idempotency-Key"
+ALLOW_HEADERS = "Content-Type, X-App-Context, X-Auth-Request, Idempotency-Key, X-Request-Id"
 MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH"})
 
 

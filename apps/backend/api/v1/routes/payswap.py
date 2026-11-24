@@ -6,6 +6,7 @@ payswap_only rejects a parkpe context with 403 before the domain runs.
 Auth cookie is checked by api/v1/deps.py against GET /api/auth/me.
 Body: schemas.VoucherOrderSerializer.
 Service: domain/payswap/vouchers.py. Retry: core/idempotency.py.
+Result line: core/actions.py action payswap.voucher.order.
 """
 
 from api.v1.deps import payswap_only
@@ -26,4 +27,5 @@ class VoucherOrderView(APIView):
                 brand=data["brand"],
                 amount=data["amount"],
             ),
+            action="payswap.voucher.order",
         )

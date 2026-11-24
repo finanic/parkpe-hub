@@ -1,3 +1,10 @@
+/* PaySwap counter for apps/payswap/index.html.
+
+   Sign-in, MFA, and sign-out go through apps/payswap/js/session.js
+   (role retailer, port 4600). Retailer creation stays on
+   apps/backend/auth/console/console.js. AuthApp._require_operator
+   rejects this origin. Voucher orders stay on js/hub.js.
+*/
 (function () {
   const view = document.getElementById("view");
   const crumb = document.getElementById("crumb");
@@ -319,11 +326,6 @@
     route();
   }
 
-  gate.addEventListener("click", (event) => {
-    const show = event.target.closest("[data-show]");
-    if (show) showGate(show.dataset.show);
-  });
-
   document.getElementById("auth-login").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.target;
@@ -333,18 +335,6 @@
     if (result.data.mfa_setup_required) return showGate("enroll");
     if (result.ok) return openCounter(result.data);
     authError(form, result.data.error || "Sign-in failed.");
-  });
-
-  document.getElementById("auth-register").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const form = event.target;
-    authError(form, "");
-    const created = await session.register(form.email.value, form.password.value);
-    if (!created.ok) return authError(form, created.data.error || "Could not create the account.");
-    const result = await session.login(form.email.value, form.password.value);
-    if (result.data.mfa_setup_required) return showGate("enroll");
-    if (result.data.mfa_required) return showGate("mfa");
-    authError(form, result.data.error || "Account saved. Sign in with the existing password.");
   });
 
   document.getElementById("auth-mfa").addEventListener("submit", async (event) => {

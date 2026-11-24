@@ -12,5 +12,6 @@ alwaysApply: true
 - Write in the voice already in the tree: short comments that name the other file, route, or role. No filler and no banner comments.
 - Shared names live in `apps/backend/auth/contract.py`. Auth checks live in `apps/backend/auth/server.py`, not in the browser.
 - After an edit, check the callers that comment points at, run the check `AGENTS.md` names for that area, and say what you ran and what you skipped.
+- A new `/api/v1` route, domain function, integration call, or other state change logs through `apps/backend/core/actions.py` in the same change. The line has request id, idempotency key when present, app context, actor, role, action, target, outcome, status, and duration. Redact tokens, cookies, OTPs, secrets, and raw payloads.
 
 A narrower rule in `.cursor/rules/` adds detail for its own files. It does not relax this baseline.

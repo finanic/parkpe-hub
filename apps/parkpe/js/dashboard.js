@@ -1,8 +1,10 @@
 /* ParkPe dashboard shell for apps/parkpe/dashboard/index.html.
 
    Vehicle slides and menus. Screen HTML comes from apps/parkpe/js/screens.js
-   (window.ParkpeScreens). Does not call apps/backend, and must not load
-   apps/payswap/js/session.js.
+   (window.ParkpeScreens). Sign-out uses apps/parkpe/js/session.js
+   (packages/contracts Role.CUSTOMER). Account creation stays on
+   apps/backend/auth/console/console.js.
+   Must not load apps/payswap/js/session.js.
 */
 const slides = [
   {
@@ -83,6 +85,11 @@ const services = {
     title: "Settings",
     icon: "settings",
     blurb: "Password, alerts and the preferences for this account.",
+  },
+  signup: {
+    title: "Create account",
+    icon: "person_add",
+    blurb: "An admin opens this account from the backend desk.",
   },
   profile: {
     title: "Profile",
@@ -492,9 +499,10 @@ markRead.addEventListener("click", () => {
 });
 
 document.querySelectorAll(".js-logout").forEach((button) => {
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     closeMenus();
-    showToast("Logout will work once sign-in is connected. This preview stays open.");
+    if (window.ParkpeSession) await window.ParkpeSession.signOut();
+    showToast("Signed out. The preview stays open.");
   });
 });
 

@@ -1607,6 +1607,34 @@ function notificationsScreen() {
     </section>`;
 }
 
+function signupScreen() {
+  return `<section class="svc-card">
+      <h2>Create account</h2>
+      <p>An admin opens this account from the backend desk. ParkPe does not take a new signup on this screen.</p>
+      <form data-signup data-step="closed" hidden>
+        <div data-signup-panel="details">
+          <label>Email<input name="email" type="email" autocomplete="username" required /></label>
+          <label>Mobile<input name="mobile" inputmode="numeric" autocomplete="tel" required /></label>
+          <label>Password<input name="password" type="password" minlength="12" autocomplete="new-password" required /></label>
+          <button class="svc-submit" type="submit">Send codes</button>
+        </div>
+        <div data-signup-panel="codes" hidden>
+          <label>Email code<input name="email_code" inputmode="numeric" autocomplete="one-time-code" /></label>
+          <label>SMS code<input name="sms_code" inputmode="numeric" autocomplete="one-time-code" /></label>
+          <button class="svc-submit" type="submit">Verify and create account</button>
+        </div>
+        <div data-signup-panel="enroll" hidden>
+          <p>Account is ready. Add this authenticator key, then enter a code from the app.</p>
+          <button class="svc-submit" type="button" data-signup-key>Generate key</button>
+          <p data-signup-secret hidden></p>
+          <label>Authenticator code<input name="app_code" inputmode="numeric" autocomplete="one-time-code" /></label>
+          <button class="svc-submit" type="submit">Enable authenticator</button>
+        </div>
+        <p data-signup-note></p>
+      </form>
+    </section>`;
+}
+
 const screens = {
   "bill-payments": billScreen,
   fastag: fastagScreen,
@@ -1622,6 +1650,7 @@ const screens = {
   "account-settings": settingsScreen,
   profile: profileScreen,
   notifications: notificationsScreen,
+  signup: signupScreen,
 };
 
 function challanTotal(root) {
@@ -1637,6 +1666,21 @@ function toast(message) {
 
 function onClick(event) {
   const root = event.currentTarget;
+  const signupKey = event.target.closest("[data-signup-key]");
+  if (signupKey && root.contains(signupKey) && window.ParkpeSession) {
+    const form = signupKey.closest("form");
+    window.ParkpeSession.beginAuthenticator().then((result) => {
+      const note = form.querySelector("[data-signup-note]");
+      const secret = form.querySelector("[data-signup-secret]");
+      if (!result.ok) {
+        note.textContent = result.data.error || "Could not start setup.";
+        return;
+      }
+      secret.hidden = false;
+      secret.textContent = result.data.secret;
+      if (result.data.backup_codes) note.textContent = "Save the backup codes: " + result.data.backup_codes.join(" ");
+    });
+  }
   const tab = event.target.closest("[data-tab]");
   if (tab && root.contains(tab)) {
     const group = tab.parentElement;
@@ -1909,6 +1953,51 @@ async function onSubmit(event) {
   event.preventDefault();
   const root = event.currentTarget;
   const data = new FormData(form);
+  if (form.matches("[data-signup]")) {
+    const note = form.querySelector("[data-signup-note]");
+    const session = window.ParkpeSession;
+    const showPanel = (name) => {
+      form.dataset.step = name;
+      form.querySelectorAll("[data-signup-panel]").forEach((node) => {
+        node.hidden = node.dataset.signupPanel !== name;
+      });
+    };
+    if (!session) {
+      note.textContent = "Sign-in service is not loaded.";
+      return;
+    }
+    if (form.dataset.step === "enroll") {
+      const enabled = await session.enableAuthenticator(String(data.get("app_code") || ""));
+      note.textContent = enabled.ok ? "Authenticator is on." : (enabled.data.error || "Code is incorrect.");
+      return;
+    }
+    if (form.dataset.step !== "codes") {
+      const started = await session.startSignup(data.get("email"), data.get("mobile"), data.get("password"));
+      note.textContent = started.ok ? "Codes sent. Enter both of them." : (started.data.error || "Could not send the codes.");
+      if (started.ok) {
+        form.dataset.signupId = started.data.signup_id;
+        showPanel("codes");
+      }
+      return;
+    }
+    const contact = await session.confirmContact(
+      form.dataset.signupId,
+      String(data.get("email_code") || ""),
+      String(data.get("sms_code") || "")
+    );
+    if (!contact.ok || !contact.data.account_ready) {
+      note.textContent = contact.data.error || "Verification did not succeed.";
+      return;
+    }
+    const signed = await session.login(String(data.get("email") || ""), String(data.get("password") || ""));
+    if (signed.data && signed.data.mfa_setup_required) {
+      showPanel("enroll");
+      note.textContent = "Account created. Generate the authenticator key to finish.";
+      return;
+    }
+    note.textContent = signed.ok ? "Account created." : (signed.data.error || "Account created. Sign-in did not open.");
+    return;
+  }
   if (form.matches("[data-bill-form]")) {
     const due = form.querySelector("[data-bill-due]");
     const current = form.querySelector("[data-op-current]");

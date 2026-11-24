@@ -3,8 +3,10 @@
    AEPS, DMT, recharge, bills, wallet, and transactions stay on this page.
    vouchers() posts through apps/payswap/js/hub.js
    (POST /api/v1/payswap/vouchers/order). Sign-in stays in
-   apps/payswap/js/session.js on port 4600 with role retailer
-   (apps/backend/auth/contract.py). ParkPe must not load this file.
+   apps/payswap/js/session.js on port 4600 with packages/contracts
+   Role.RETAILER (apps/backend/auth/contract.py ROLE_RETAILER).
+   Retailer creation stays on the operator console.
+   ParkPe must not load this file.
 */
 (function () {
   const mk = (id) => `https://static.mobikwik.com/appdata/operator_icons/op${id}.png`;

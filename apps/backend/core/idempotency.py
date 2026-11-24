@@ -14,7 +14,8 @@ ErrorCode). A missing key is 400 validation.
 The row is locked with select_for_update inside transaction.atomic, and
 the domain call stays inside that transaction. Postgres waits on that lock.
 SQLite can raise OperationalError while the first write is still open;
-run_once retries and then reads the stored response. This is not the
+run_once retries and then reads the stored response. Each outcome is
+logged by core/actions.py as idempotency.reserve. This is not the
 refresh-cookie rule in apps/backend/auth/server.py.
 """
 
@@ -25,6 +26,7 @@ import json
 import time
 from decimal import Decimal
 
+from core.actions import elapsed_ms, log_action
 from django.db import IntegrityError, OperationalError, transaction
 from rest_framework.exceptions import APIException
 
@@ -79,12 +81,28 @@ def _locked(app_context, user_id, endpoint, key, body_hash, produce):
         )
         if existing is not None:
             if existing.payload_hash != body_hash:
+                log_action(
+                    action="idempotency.reserve",
+                    outcome="conflict",
+                    status=409,
+                    duration_ms=0,
+                    error_code="idempotency_conflict",
+                    error_reason="This key was already used for a different request.",
+                )
                 raise IdempotencyProblem(
                     "This key was already used for a different request.",
                     "idempotency_conflict",
                     409,
                 )
+            log_action(
+                action="idempotency.reserve",
+                outcome="replay",
+                status=existing.status_code,
+                duration_ms=0,
+                target_id=_reference(existing.body),
+            )
             return existing.status_code, existing.body
+        started = time.perf_counter()
         record = IdempotencyRecord.objects.create(
             app_context=app_context,
             user_id=user_id,
@@ -96,11 +114,24 @@ def _locked(app_context, user_id, endpoint, key, body_hash, produce):
             body={},
         )
         status, body = produce()
+        log_action(
+            action="idempotency.reserve",
+            outcome="created",
+            status=status,
+            duration_ms=elapsed_ms(started),
+            target_id=_reference(body),
+        )
         record.state = "done"
         record.status_code = status
         record.body = body
         record.save(update_fields=["state", "status_code", "body"])
         return status, body
+
+
+def _reference(body) -> str:
+    if isinstance(body, dict) and isinstance(body.get("reference"), str):
+        return body["reference"]
+    return ""
 
 
 def _plain(value):
