@@ -619,7 +619,7 @@ function challanScreen() {
               <p>Overspeeding</p>
               <small><span class="mi">calendar_month</span> 12 Nov 2026 · <span class="mi">location_on</span> MG Road · <span class="mi">directions_car</span> <b data-challan-vehicle>DL01AB1234</b></small>
             </div>
-            <dl><div><dt>Owner</dt><dd>ParkPe User</dd></div><div><dt>Authority</dt><dd>Delhi Traffic Police</dd></div></dl>
+            <dl><div><dt>Owner</dt><dd>Verified owner</dd></div><div><dt>Authority</dt><dd>Traffic Authority</dd></div></dl>
             <div class="ditto-amt"><small>Amount</small><strong>₹1,000</strong><span>Base ₹800</span><span>+ penalty ₹200</span></div>
           </label>
           <article class="ditto-challan-row is-settled">
@@ -682,168 +682,22 @@ function voucherScreen() {
         <header class="svc-voucher-hero">
           <div>
             <h1>ParkPe &amp;<br />Vouchers</h1>
-            <p>Secure, instant gifting with trusted ParkPe vouchers for every occasion.</p>
+            <p>Manage and check ParkPe vouchers linked to your account.</p>
           </div>
           <img src="../assets/images/dashboard/card_voucher12.png" alt="ParkPe gift voucher" />
           <div class="svc-voucher-float">
             <span class="mi">verified</span>
-            <div><strong>Instant voucher creation</strong><small>Separate voucher for every successful payment.</small></div>
+            <div><strong>Account vouchers</strong><small>Only verified vouchers issued to your account appear here.</small></div>
           </div>
         </header>
         <section class="svc-card svc-voucher-list">
           <div class="svc-voucher-bar">
             <div class="svc-title-row">
               <span class="mi">confirmation_number</span>
-              <div><h2>ParkPe voucher list</h2><p>Showing 1-2 of 2 vouchers</p></div>
-            </div>
-            <label class="svc-search"><input type="search" data-voucher-search placeholder="Search voucher, reference or amount..." /><span class="mi">search</span></label>
-            <div class="svc-voucher-actions">
-              <button type="button" data-voucher="buy"><span class="mi">add_card</span>Buy Voucher</button>
-              <button type="button" data-voucher="link"><span class="mi">link</span>Link a Voucher</button>
-              <button type="button" data-voucher="transactions"><span class="mi">receipt_long</span>Transactions</button>
-              <button type="button" data-voucher="display"><span class="mi">desktop_windows</span>Display</button>
-              <button type="button" data-voucher="manage"><span class="mi">dashboard_customize</span>Manage cards</button>
+              <div><h2>ParkPe voucher list</h2><p>No vouchers linked yet</p></div>
             </div>
           </div>
-          <div class="svc-stats">
-            <article><div><small>Active</small><strong>1</strong></div><span class="mi">confirmation_number</span></article>
-            <article><div><small>Balance</small><strong>Rs 1,250</strong></div><span class="mi">account_balance_wallet</span></article>
-            <article><div><small>Used</small><strong>1</strong></div><span class="mi">receipt_long</span></article>
-            <article><div><small>Linked</small><strong>2</strong></div><span class="mi">link</span></article>
-          </div>
-          <div class="svc-table-head"><span>Category</span><span>Voucher code</span><span>Amount</span><span>Status</span><span>Action</span></div>
-          <div class="svc-table-row" data-voucher-row>
-            <div><span class="mi">confirmation_number</span><div><strong>ParkPe</strong><small>Issued 12 Aug 2026</small></div></div>
-            <div><strong>PP-20481</strong><small>REF-20481</small></div>
-            <div><strong>Rs 1250.00</strong><small>12 Aug 2026</small></div>
-            <span class="svc-pill">Active</span>
-            <button type="button" data-voucher="detail" data-code="PP-20481" data-ref="REF-20481" data-amount="1250.00" data-issued="12 Aug 2026" data-status="Active">Open</button>
-          </div>
-          <div class="svc-table-row" data-voucher-row>
-            <div><span class="mi">confirmation_number</span><div><strong>ParkPe</strong><small>Issued 02 Jan 2026</small></div></div>
-            <div><strong>PP-19802</strong><small>REF-19802</small></div>
-            <div><strong>Rs 0.00</strong><small>02 Jan 2026</small></div>
-            <span class="svc-pill">Used</span>
-            <button type="button" data-voucher="detail" data-code="PP-19802" data-ref="REF-19802" data-amount="0.00" data-issued="02 Jan 2026" data-status="Used">Open</button>
-          </div>
-        </section>
-      </div>
-      <div data-voucher-view="buy" hidden>
-        <button class="svc-back" type="button" data-voucher="home"><span class="mi">arrow_back</span>Back to vouchers</button>
-        <div class="svc-two">
-          <form class="svc-card">
-            <div class="svc-title-row"><span class="mi">add_card</span><div><h2>Buy ParkPe voucher</h2><p>Create a voucher with secure ParkPe checkout.</p></div></div>
-            <label class="svc-label">Amount (INR)
-              <small>Minimum Rs 100 · Maximum Rs 10,000</small>
-              <span class="svc-rupee"><b>Rs</b><input data-amount-input name="amount" type="number" min="100" max="10000" value="1000" /></span>
-            </label>
-            <div class="svc-chips">
-              ${[100, 500, 1000, 2000, 5000, 10000].map((amount) => `<button type="button" data-amount="${amount}" class="${amount === 1000 ? "is-on" : ""}">Rs ${amount}</button>`).join("")}
-            </div>
-            <button class="svc-submit" type="submit"><span class="mi">lock</span> Pay securely with ParkPe <span class="mi">arrow_forward</span></button>
-          </form>
-          <aside class="svc-rules">
-            <p class="svc-kicker">Voucher rules</p>
-            <h3>Safe, instant, separate</h3>
-            <div><strong>One payment, one voucher</strong><p>Each successful payment creates its own voucher.</p></div>
-            <div><strong>Rs 100 to Rs 10,000</strong><p>Stay inside the voucher amount range.</p></div>
-            <div><strong>Use it on ParkPe</strong><p>Parking, bills and other ParkPe services.</p></div>
-          </aside>
-        </div>
-      </div>
-      <div data-voucher-view="link" hidden>
-        <button class="svc-back" type="button" data-voucher="home"><span class="mi">arrow_back</span>Back to vouchers</button>
-        <div class="svc-two">
-          <form class="svc-card">
-            <div class="svc-title-row"><span class="mi">link</span><div><h2>Link a voucher</h2><p>Add an existing ParkPe voucher securely.</p></div></div>
-            <div class="svc-pair">
-              <label>Voucher code<input name="code" placeholder="Enter voucher code" autocomplete="off" /></label>
-              <label>PIN<span class="svc-pin"><input name="pin" type="password" data-pin-input placeholder="Enter PIN" autocomplete="one-time-code" /><button type="button" data-pin aria-label="Toggle PIN visibility"><span class="mi">visibility</span></button></span></label>
-            </div>
-            <button class="svc-submit svc-submit-soft" type="submit"><span class="mi">link</span> Link to my account <span class="mi">arrow_forward</span></button>
-          </form>
-          <aside class="svc-rules">
-            <p class="svc-kicker">Secure linking</p>
-            <h3>Credentials stay protected</h3>
-            <div><strong>Code and PIN together</strong><p>Both are required before a voucher is linked.</p></div>
-            <div><strong>One account</strong><p>A voucher links to the signed-in ParkPe account.</p></div>
-          </aside>
-        </div>
-      </div>
-      <div data-voucher-view="balance" hidden>
-        <button class="svc-back" type="button" data-voucher="home"><span class="mi">arrow_back</span>Back to vouchers</button>
-        <section class="svc-balance">
-          <div>
-            <div class="svc-title-row"><span class="mi">account_balance_wallet</span><div><p class="svc-kicker">ParkPe voucher</p><h2>Check voucher balance</h2><p>Verify your purchased 16-digit voucher securely.</p></div></div>
-            <form class="svc-balance-form">
-              <label class="svc-icon-field"><span class="mi">pin</span><input name="code" inputmode="numeric" maxlength="19" placeholder="Enter your Voucher Code" /></label>
-              <button type="submit">Check Balance <span class="mi">arrow_forward</span></button>
-            </form>
-          </div>
-          <aside>
-            <p class="svc-kicker">Available balance</p>
-            <strong data-balance-value>Rs 1250.00</strong>
-            <p data-balance-note>PP-20481 is active on this account.</p>
-          </aside>
-        </section>
-      </div>
-      <div data-voucher-view="transactions" hidden>
-        <button class="svc-back" type="button" data-voucher="home"><span class="mi">arrow_back</span>Back to vouchers</button>
-        <section class="svc-card ditto-panel">
-          <header class="ditto-panel-head">
-            <div class="svc-title-row"><span class="mi">receipt_long</span><div><h2>ParkPe Voucher Transactions</h2><p>2 purchased voucher records</p></div></div>
-            <button type="button" class="svc-submit" data-voucher="buy">Buy ParkPe voucher</button>
-          </header>
-          <div class="ditto-txn-head"><span>When</span><span>Voucher code</span><span>Type</span><span>Amount</span><span>Reference</span><span>Status</span></div>
-          <div class="ditto-txn-row"><span>12 Aug 2026</span><span>PP-20481</span><span>TOPUP_PG</span><span class="ditto-plus">+ Rs 1250.00</span><span>REF-20481</span><span class="svc-pill">Completed</span></div>
-          <div class="ditto-txn-row"><span>02 Jan 2026</span><span>PP-19802</span><span>TOPUP_PG</span><span class="ditto-plus">+ Rs 500.00</span><span>REF-19802</span><span class="svc-pill">Completed</span></div>
-        </section>
-      </div>
-      <div data-voucher-view="display" hidden>
-        <button class="svc-back" type="button" data-voucher="home"><span class="mi">arrow_back</span>Back to vouchers</button>
-        <section class="svc-card">
-          <div class="svc-title-row"><span class="mi">desktop_windows</span><div><h2>Real display</h2><p>A presentation view for purchased ParkPe vouchers.</p></div></div>
-          <div class="ditto-cards">
-            <article class="ditto-vcard ditto-vcard-a"><div><header><strong>ParkPe</strong><span class="mi">confirmation_number</span></header><p>Rs 1250.00</p><small>Available Balance</small></div><footer><span>Voucher Code<strong>PP-20481</strong></span><span>Issued On<strong>12 Aug 2026</strong></span></footer></article>
-            <article class="ditto-vcard ditto-vcard-b"><div><header><strong>ParkPe</strong><span class="mi">confirmation_number</span></header><p>Rs 0.00</p><small>Available Balance</small></div><footer><span>Voucher Code<strong>PP-19802</strong></span><span>Issued On<strong>02 Jan 2026</strong></span></footer></article>
-          </div>
-        </section>
-      </div>
-      <div data-voucher-view="manage" hidden>
-        <button class="svc-back" type="button" data-voucher="home"><span class="mi">arrow_back</span>Back to vouchers</button>
-        <section class="svc-card">
-          <div class="svc-title-row"><span class="mi">dashboard_customize</span><div><h2>Lock &amp; Unlock Cards</h2><p>View purchased vouchers and open details for support actions.</p></div></div>
-          <div class="ditto-manage">
-            <article><b>1</b><div><strong>REF-20481</strong><span>Voucher PP-20481 · Active · 12 Aug 2026</span></div><button type="button" data-voucher="detail" data-code="PP-20481" data-ref="REF-20481" data-amount="1250.00" data-issued="12 Aug 2026" data-status="Active">View details</button></article>
-            <article><b>2</b><div><strong>REF-19802</strong><span>Voucher PP-19802 · Used · 02 Jan 2026</span></div><button type="button" data-voucher="detail" data-code="PP-19802" data-ref="REF-19802" data-amount="0.00" data-issued="02 Jan 2026" data-status="Used">View details</button></article>
-          </div>
-        </section>
-      </div>
-      <div data-voucher-view="detail" hidden>
-        <header class="svc-card ditto-detail-head">
-          <button class="svc-round" type="button" data-voucher="home" aria-label="Back to vouchers"><span class="mi">arrow_back</span></button>
-          <span class="svc-bag"><span class="mi">confirmation_number</span></span>
-          <div><h1>Voucher detail</h1><p>Balance, PIN for bill pay, and ledger activity</p></div>
-          <button type="button" class="svc-outline" data-voucher="home"><span class="mi">list</span>All vouchers</button>
-        </header>
-        <section class="svc-card ditto-detail">
-          <div>
-            <p class="svc-kicker">Voucher code</p>
-            <strong data-v-code>PP-20481</strong>
-            <p class="svc-kicker">Reference</p>
-            <span data-v-ref>REF-20481</span>
-            <p data-v-issued>Created 12 Aug 2026</p>
-            <span class="svc-pill" data-v-status>Active</span>
-          </div>
-          <aside>
-            <p class="svc-kicker">Balance</p>
-            <strong data-v-balance>₹1250.00</strong>
-            <p data-v-original>Original ₹1250.00</p>
-          </aside>
-        </section>
-        <section class="svc-card">
-          <h2>Ledger</h2>
-          <div class="ditto-txn-row"><span data-v-issued-row>12 Aug 2026</span><span>Purchase</span><span class="ditto-plus" data-v-ledger>+ Rs 1250.00</span><span class="svc-pill">Completed</span></div>
+          <p class="svc-muted" style="padding:12px 0">No ParkPe vouchers are currently active on this account.</p>
         </section>
       </div>
     </section>`;
@@ -1055,7 +909,7 @@ function carpoolScreen() {
             <h2>Identity verification</h2>
             <p class="svc-muted">CoPilot requires DigiLocker KYC and a verified driving licence.</p>
             <label>Driving licence<input name="dl" placeholder="DL-0420110012345" /></label>
-            <label>Vehicle number<input name="vrn" value="DL 01 AB 1234" /></label>
+            <label>Vehicle number<input name="vrn" placeholder="DL01AB1234" /></label>
             <button class="svc-submit" type="submit">Continue to trip details</button>
           </form>
           <form class="svc-card" data-driver-trip hidden>
@@ -1087,317 +941,145 @@ function carpoolScreen() {
 }
 
 function transactionsScreen() {
-  const rows = [
-    ["24 Nov 2026", "FASTag recharge", "DL 01 AB 1234 · ICICI", "₹500", "Paid"],
-    ["22 Nov 2026", "Parking", "Cyber Hub, Gurugram", "₹120", "Active"],
-    ["18 Nov 2026", "Electricity", "BSES Rajdhani", "₹2,140", "Paid"],
-    ["12 Nov 2026", "Challan", "DL 8C AX 4410", "₹1,000", "Due"],
-  ]
-    .map(
-      ([when, service, ref, amount, status]) => `
-      <div class="svc-txn" data-txn>
-        <span>${when}</span><strong>${service}</strong><span>${ref}</span><b>${amount}</b><em class="svc-pill">${status}</em>
-      </div>`,
-    )
-    .join("");
+  const sessions = (window.ParkpeData && window.ParkpeData.sessions) || [];
+  const vehicles = (window.ParkpeData && window.ParkpeData.vehicles) || [];
+  const rows = sessions.length
+    ? sessions
+        .map(
+          (s) => {
+            const st = String(s.state || "active").toLowerCase();
+            const pillCls = st === "closed" ? "svc-pill is-closed" : "svc-pill is-active";
+            return `
+      <div class="svc-txn" data-txn data-txn-state="${esc(st === "closed" ? "closed" : "active")}">
+        <span>${esc(s.created_at ? new Date(s.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—")}</span>
+        <strong>Parking Session</strong>
+        <span>${esc(s.reference)}${s.vehicle ? " · " + esc(s.vehicle) : ""} · ${esc(s.site_code)}/${esc(s.bay)}</span>
+        <b>${s.amount ? "₹" + esc(s.amount) : "Session"}</b>
+        <em class="${pillCls}">${esc(s.state || "active")}</em>
+      </div>`;
+          }
+        )
+        .join("")
+    : `<div class="svc-txn-empty"><span>No recorded ParkPe transactions or parking sessions yet.</span><a class="svc-chip" href="#parking">Book parking</a></div>`;
   return `
     <section class="svc svc-tx">
       <header class="svc-tx-hero">
         <div>
-          <span class="svc-secure"><span class="mi">verified_user</span>Secure payment activity</span>
-          <h1>Transaction history</h1>
-          <p>Payments, bill pay, challans, vouchers and Connect orders in one place.</p>
+          <span class="svc-secure"><span class="mi">verified_user</span>Live account activity</span>
+          <h1>Transaction &amp; session history</h1>
+          <p>Only verified sessions and payments stored for your account appear here.</p>
           <a href="#dashboard">Back to dashboard</a>
         </div>
         <div class="svc-tx-stats">
-          <article><span class="mi">payments</span><strong>₹3,760</strong><small>This month</small></article>
-          <article><span class="mi">check_circle</span><strong>3</strong><small>Paid</small></article>
-          <article><span class="mi">schedule</span><strong>1</strong><small>Due</small></article>
-          <article><span class="mi">bolt</span><strong>1</strong><small>Active</small></article>
+          <article><span class="mi">receipt_long</span><strong>${sessions.length}</strong><small>Total sessions</small></article>
+          <article><span class="mi">bolt</span><strong>${sessions.filter((s) => s.state !== "closed").length}</strong><small>Active</small></article>
+          <article><span class="mi">check_circle</span><strong>${sessions.filter((s) => s.state === "closed").length}</strong><small>Closed</small></article>
+          <article><span class="mi">directions_car</span><strong>${vehicles.length}</strong><small>Vehicles</small></article>
         </div>
       </header>
-      <label class="svc-search svc-search-lg"><span class="mi">search</span><input type="search" data-txn-search placeholder="Search transactions" /></label>
+      <div class="svc-tx-controls">
+        <div class="svc-chips" role="tablist" aria-label="Filter sessions">
+          <button type="button" class="is-on" data-parkpe-txn-filter="all">All</button>
+          <button type="button" data-parkpe-txn-filter="active">Active</button>
+          <button type="button" data-parkpe-txn-filter="closed">Closed</button>
+        </div>
+        <label class="svc-search svc-search-lg"><span class="mi">search</span><input type="search" data-txn-search placeholder="Search sessions, ref, or vehicle" /></label>
+      </div>
       <div class="svc-card svc-tx-table">
-        <div class="svc-txn svc-txn-head"><span>When</span><span>Service</span><span>Reference</span><span>Amount</span><span>Status</span></div>
+        <div class="svc-txn svc-txn-head"><span>When</span><span>Service</span><span>Reference</span><span>Type / Amount</span><span>Status</span></div>
         ${rows}
       </div>
     </section>`;
 }
 
 function connectScreen() {
-  const vehicle = (number, name, on) =>
-    `<button type="button" class="svc-vrow${on ? " is-on" : ""}" data-vehicle data-number="${number}" data-name="${name}" data-rc="${on ? "Valid" : "Valid"}" data-ins="${on ? "Valid" : "Expired"}" data-puc="${on ? "18 days" : "Valid"}" data-qr="${on ? "Active · 12 scans" : "Not issued"}"><strong>${number}</strong><small>${name}</small></button>`;
+  const vehicles = (window.ParkpeData && window.ParkpeData.vehicles) || [];
+  const vehicleListHtml = vehicles.length
+    ? vehicles
+        .map(
+          (v, idx) => `
+        <div class="svc-vrow${idx === 0 ? " is-on" : ""}" style="display:flex;justify-content:space-between;align-items:center">
+          <button type="button" style="border:0;background:none;text-align:left;flex:1;cursor:pointer" data-vehicle data-number="${esc(v.registration)}" data-name="${esc([v.make_model, v.color].filter(Boolean).join(" · ") || "Registered vehicle")}" data-rc="${esc(v.rc_status || "Pending")}" data-ins="${esc(v.insurance_expiry || "—")}" data-puc="${esc(v.puc_expiry || "—")}" data-qr="${esc(v.qr_status || "Not issued")}">
+            <strong>${esc(v.registration)}</strong><small>${esc([v.make_model, v.color].filter(Boolean).join(" · ") || "Vehicle")}</small>
+          </button>
+          <button type="button" data-delete-vehicle="${esc(v.vehicle_id || v.id)}" title="Remove vehicle" style="border:0;background:none;color:#b91c1c;cursor:pointer;font-size:12px;padding:4px 8px">Remove</button>
+        </div>`
+        )
+        .join("")
+    : `<p class="svc-muted">No vehicles registered on your account yet. Click “Add vehicle” above to add one.</p>`;
+  const first = vehicles[0];
   return `
     <section class="svc svc-connect">
       <div data-connect-view="hub">
       <header class="svc-connect-head">
-        <div><h1>Connect Hub</h1><p>Vehicles, QR stickers, chat &amp; calls</p></div>
+        <div><h1>Connect Hub</h1><p>Manage your registered vehicles and QR stickers</p></div>
         <button type="button" data-connect="add"><span class="mi">add</span>Add vehicle</button>
       </header>
-      <nav class="svc-tabs" aria-label="Connect sections">
-        <button type="button" class="is-on" data-tab="vehicles">Vehicles &amp; QR <span>2</span></button>
-        <button type="button" data-tab="inbox">Chat</button>
-        <button type="button" data-tab="calls">Calls</button>
-      </nav>
       <div data-panel="vehicles" class="svc-connect-grid">
         <aside class="svc-card">
-          <p class="svc-kicker svc-kicker-dark">Your vehicles</p>
-          ${vehicle("DL 01 AB 1234", "Hyundai Creta", true)}
-          ${vehicle("HR 26 DK 9081", "Maruti Suzuki Swift", false)}
+          <p class="svc-kicker svc-kicker-dark">Your vehicles (${vehicles.length})</p>
+          ${vehicleListHtml}
         </aside>
         <div class="svc-connect-main">
           <article class="svc-card">
             <p class="svc-kicker svc-kicker-dark">Selected vehicle</p>
-            <h2 data-connect-number>DL 01 AB 1234</h2>
-            <p data-connect-name>Hyundai Creta</p>
+            <h2 data-connect-number>${first ? esc(first.registration) : "No vehicle selected"}</h2>
+            <p data-connect-name>${first ? esc([first.make_model, first.color].filter(Boolean).join(" · ") || "Registered vehicle") : "Add a vehicle to view details"}</p>
             <div class="svc-pills">
-              <span>RC · <b data-connect-rc>Valid</b></span>
-              <span>QR · <b data-connect-qr>Active · 12 scans</b></span>
-              <span>Connect · On</span>
+              <span>RC · <b data-connect-rc>${first ? esc(first.rc_status || "Pending") : "—"}</b></span>
+              <span>QR · <b data-connect-qr>${first ? esc(first.qr_status || "Not issued") : "—"}</b></span>
             </div>
             <div class="svc-compliance">
-              <div><small>RC / Fitness</small><strong data-connect-rc>Valid</strong></div>
-              <div><small>Insurance</small><strong data-connect-ins>Valid</strong></div>
-              <div><small>PUC</small><strong data-connect-puc>18 days</strong></div>
+              <div><small>RC Status</small><strong data-connect-rc>${first ? esc(first.rc_status || "Pending") : "—"}</strong></div>
+              <div><small>Insurance</small><strong data-connect-ins>${first ? esc(first.insurance_expiry || "—") : "—"}</strong></div>
+              <div><small>PUC</small><strong data-connect-puc>${first ? esc(first.puc_expiry || "—") : "—"}</strong></div>
             </div>
           </article>
-          <div class="svc-actions">
-            <button type="button" data-connect="detail"><span class="mi">badge</span>Vehicle detail</button>
-            <button type="button"><span class="mi">link</span>Copy link</button>
-            <button type="button" data-connect="sticker"><span class="mi">local_shipping</span>Order sticker</button>
-          </div>
-          <div class="svc-wallets">
-            <article><small>Wallet</small><strong>₹1,250.00</strong><a href="#parkpe-voucher">+ Recharge</a></article>
-            <article><small>Voice rate</small><strong>₹2<small>/min</small></strong></article>
-          </div>
           <article class="svc-card">
-            <h3>Sticker preview</h3>
-            <p class="svc-muted">100mm windshield layout — virtual QR with the vehicle number printed.</p>
-            <div class="svc-sticker"><span class="mi">qr_code_2</span><strong data-connect-number>DL 01 AB 1234</strong></div>
+            <h3>Windshield QR layout</h3>
+            <p class="svc-muted">Virtual QR tag linked to your selected vehicle registration.</p>
+            <div class="svc-sticker"><span class="mi">qr_code_2</span><strong data-connect-number>${first ? esc(first.registration) : "—"}</strong></div>
           </article>
         </div>
       </div>
-      <div data-panel="inbox" hidden>
-        <div class="ditto-inbox">
-          <aside class="svc-card">
-            <header><h2>Chats</h2></header>
-            <button type="button" class="is-on" data-thread><b>P</b><span><strong>DL 01 AB 1234</strong><small>Parking marshal · 2m</small></span></button>
-            <button type="button" data-thread data-who="Gate" data-body="Please move to bay A4."><b>G</b><span><strong>HR 26 DK 9081</strong><small>Gate · 1h</small></span></button>
-          </aside>
-          <section class="svc-card ditto-thread">
-            <header><b>P</b><div><strong data-thread-who>Parking marshal</strong><small>End-to-end with your vehicle QR</small></div></header>
-            <div class="ditto-log">
-              <p data-thread-body>Your bay at Cyber Hub is ready.</p>
-              <p class="is-me">On my way.</p>
-            </div>
-            <form data-thread-form><input name="body" placeholder="Message" /><button type="submit">Send</button></form>
-          </section>
-        </div>
-      </div>
-      <div data-panel="calls" class="svc-empty" hidden><span class="mi">call</span><p>No calls yet</p></div>
       </div>
       <div data-connect-view="add" hidden>
         <button class="svc-back" type="button" data-connect="hub"><span class="mi">arrow_back</span>Connect hub</button>
         <h1>Add vehicle</h1>
-        <p class="svc-muted">We verify your registration certificate (RC) against official records first. Your vehicle is added to your fleet only after verification succeeds.</p>
-        <ol class="ditto-steps"><li class="is-on">1 Number</li><li>2 Verify RC</li><li>3 Add to fleet</li></ol>
-        <form class="svc-card" data-rc-form data-rc-input>
-          <label>Registration number (VRN)<input name="vrn" required placeholder="DL01AB1234" autocomplete="off" value="DL01AB1234" /></label>
-          <p class="svc-muted">As printed on your RC — spaces optional.</p>
-          <button class="svc-submit" type="submit">Verify RC</button>
-        </form>
-        <section class="svc-card ditto-ok" data-rc-ok hidden>
-          <p class="svc-pill">RC verified — sample record</p>
-          <h2 data-rc-vrn>DL01AB1234</h2>
-          <ul class="ditto-rc">
-            <li><span>Model</span> Hyundai Creta</li>
-            <li><span>Fuel</span> Petrol</li>
-            <li><span>Registered</span> 14 Mar 2022</li>
-            <li><span>Owner (RC)</span> ParkPe User</li>
-            <li><span>Insurance valid until</span> 18 Dec 2026</li>
-            <li><span>PUC</span> 18 days left</li>
-          </ul>
-          <p class="svc-muted">Live RC lookup is not connected. Nothing is written to a fleet.</p>
-          <button type="button" class="svc-submit" data-connect="detail">Open vehicle</button>
-        </section>
-      </div>
-      <div data-connect-view="detail" hidden>
-        <button class="svc-back" type="button" data-connect="hub"><span class="mi">arrow_back</span>Connect hub</button>
-        <h1 data-connect-name>Hyundai Creta</h1>
-        <p><b data-connect-number>DL 01 AB 1234</b> <span class="svc-pill">Valid</span></p>
-        <section class="svc-card">
-          <h2>Renewal dates</h2>
-          <div class="ditto-fit">
-            <article><small>RC validity</small><strong data-connect-rc>Valid</strong><p>Fitness on record</p></article>
-            <article><small>Insurance</small><strong data-connect-ins>Valid</strong><p>Check the date on the policy</p></article>
-            <article><small>PUC</small><strong data-connect-puc>18 days</strong><p>Renew before it lapses</p></article>
-          </div>
-        </section>
-        <section class="svc-card">
-          <h2>RC details</h2>
-          <ul class="ditto-rc">
-            <li><span>Maker model</span> Hyundai Creta</li>
-            <li><span>Fuel</span> Petrol</li>
-            <li><span>Owner</span> ParkPe User</li>
-          </ul>
-        </section>
-      </div>
-      <div data-connect-view="sticker" hidden>
-        <button class="svc-back" type="button" data-connect="hub"><span class="mi">arrow_back</span>Connect hub</button>
-        <h1>Order Connect QR sticker</h1>
-        <p class="svc-muted">Physical weather-resistant label with your vehicle’s Connect QR. Shipped to your address.</p>
-        <form class="svc-card">
-          <h2>1. Product &amp; delivery</h2>
-          <label>Product<select name="product"><option>Windshield QR — ₹149</option><option>Bumper QR — ₹129</option></select></label>
-          <label>Quantity<input name="qty" type="number" min="1" max="20" value="1" /></label>
-          <label>Link to vehicle<select><option>DL 01 AB 1234</option><option>HR 26 DK 9081</option><option>None</option></select></label>
-          <h3>Shipping</h3>
-          <div class="svc-pair">
-            <label>Full name<input name="name" value="ParkPe User" /></label>
-            <label>Phone<input name="phone" value="9800000010" /></label>
-          </div>
-          <label>Address line 1<input name="line1" placeholder="House, street" /></label>
-          <label>Address line 2<input name="line2" placeholder="Area" /></label>
-          <div class="svc-pair">
-            <label>City<input name="city" value="Gurugram" /></label>
-            <label>State<input name="state" value="Haryana" /></label>
-            <label>PIN<input name="pin" value="122002" /></label>
-          </div>
-          <h3>Payment method</h3>
-          <label class="ditto-check"><input type="radio" name="pm" checked /> Card / UPI / Netbanking</label>
-          <label class="ditto-check"><input type="radio" name="pm" /> ParkPe voucher</label>
-          <p>Estimated total: <strong>₹149.00</strong></p>
-          <button class="svc-submit" type="submit">Place sticker order</button>
+        <p class="svc-muted">Register your vehicle to start ParkPe QR sessions and track documents.</p>
+        <form class="svc-card" data-parkpe-add-vehicle>
+          <label>Registration number<input name="registration" required placeholder="DL01AB1234" autocomplete="off" /></label>
+          <label>Make &amp; model<input name="make_model" placeholder="e.g. Hyundai Creta" autocomplete="off" /></label>
+          <label>Color<input name="color" placeholder="e.g. White" autocomplete="off" /></label>
+          <label>Fuel type<select name="fuel_type"><option value="">Select fuel</option><option value="Petrol">Petrol</option><option value="Diesel">Diesel</option><option value="EV">EV</option><option value="CNG">CNG</option></select></label>
+          <p class="svc-muted" data-add-vehicle-msg></p>
+          <button class="svc-submit" type="submit">Add vehicle to my account</button>
         </form>
       </div>
     </section>`;
 }
 
 function parkingScreen() {
-  const tile = (view, title, text, badge, meta, iconName) => `
-    <button type="button" class="svc-park-tile" data-park="${view}">
-      <div><span class="mi">${iconName}</span><b>${badge}</b></div>
-      <h2>${title}</h2>
-      <p>${text}</p>
-      <footer><span>${meta}</span><span class="mi">arrow_forward</span></footer>
-    </button>`;
+  const sessions = (window.ParkpeData && window.ParkpeData.sessions) || [];
+  const histHtml = sessions.length
+    ? sessions
+        .map(
+          (s) => `<article class="svc-card ditto-history"><div><strong>${esc(s.site_code)} · Bay ${esc(s.bay)}</strong><p>${esc(s.vehicle)} · ${esc(s.state)}</p><small>${esc(s.reference)}</small></div><b>${esc(s.state)}</b></article>`
+        )
+        .join("")
+    : `<p class="svc-muted">No parking sessions recorded on your account yet. Start one via Connect QR.</p>`;
   return `
     <section class="svc">
-      <div data-park-view="hub">
-        <div class="svc-lime svc-park">
-          <p class="svc-kicker">Parking desk</p>
-          <h1>Customer parking</h1>
-          <p>Book slots, monitor live occupancy and review history — counter flows only.</p>
-        </div>
-        <div class="svc-park-tiles">
-          ${tile("book", "Book Parking", "Create a new parking booking and collect customer payment.", "New booking", "2 min setup", "local_parking")}
-          ${tile("slots", "Active Slots", "Check occupied, available and expiring parking slots.", "Live status", "12 slots active", "grid_view")}
-          ${tile("history", "Parking History", "Review completed bookings, receipts and customer records.", "Reports", "Last 30 days", "history")}
-        </div>
-        <div class="svc-split">
-          <section class="svc-card">
-            <h2>Parking Guidelines</h2>
-            <div class="svc-guides">
-              <p>Verify vehicle number before creating a booking.</p>
-              <p>Confirm slot availability with the customer before payment.</p>
-              <p>Keep receipt or booking ID for customer support.</p>
-              <p>Close active slots after vehicle exit to avoid mismatch.</p>
-            </div>
-          </section>
-          <aside class="svc-desk">
-            <h2>Desk note</h2>
-            <p>Use parking service only after confirming customer details, vehicle type and expected duration. Failed or duplicate payments should be checked from transaction history before retrying.</p>
-            <div><span><strong>Fast</strong><small>Booking</small></span><span><strong>Live</strong><small>Slots</small></span><span><strong>Easy</strong><small>Receipt</small></span></div>
-          </aside>
-        </div>
+      <div class="svc-lime svc-park">
+        <p class="svc-kicker">Parking</p>
+        <h1>Your parking sessions</h1>
+        <p>Live sessions started through ParkPe QR Connect.</p>
       </div>
-      <div data-park-view="book" hidden>
-        <div class="ditto-book-head">
-          <button class="svc-back" type="button" data-park="hub"><span class="mi">arrow_back</span>Parking</button>
-          <div>
-            <p class="svc-kicker">Retailer</p>
-            <h1>Book Parking</h1>
-            <p class="svc-muted">Pincode search, then location, vehicle, entry time and duration, then a quote and QR slip.</p>
-          </div>
-        </div>
-        <section class="svc-card ditto-pass" data-book-slip hidden>
-          <p class="svc-kicker">Payment sample</p>
-          <h2>Your parking pass</h2>
-          <p>Cyber Hub, Gurugram · <span data-slip-vehicle>DL 01 AB 1234</span> · ₹120</p>
-          <div class="ditto-slip">
-            <span class="mi">qr_code_2</span>
-            <div>
-              <p>Booking ID: <b>PK-20481</b></p>
-              <p>Entry from: <b>Today, 4:10 PM</b></p>
-              <p>Valid until: <b>Today, 8:30 PM</b></p>
-            </div>
-          </div>
-        </section>
-        <div class="ditto-book-grid">
-          <div>
-            <div class="svc-card ditto-steps">
-              <span data-book-step="1" class="is-on">1 Pincode</span>
-              <span data-book-step="2">2 Parking point</span>
-              <span data-book-step="3">3 Vehicle &amp; window</span>
-            </div>
-            <section class="svc-card" data-book-card="1">
-              <h2>Step 1 — Area pincode</h2>
-              <p class="svc-muted">Search loads sample locations. Live ParkPe parking API is not connected.</p>
-              <div class="ditto-pinrow">
-                <label>Pincode<input data-book-pin inputmode="numeric" maxlength="8" placeholder="e.g. 122002" value="122002" /></label>
-                <button type="button" data-pin-search>Search</button>
-              </div>
-            </section>
-            <section class="svc-card is-dim" data-book-card="2">
-              <h2>Step 2 — Parking points</h2>
-              <p class="svc-muted">Choose a location.</p>
-              <div class="ditto-points" data-points hidden>
-                <button type="button" data-point="Cyber Hub, Gurugram"><strong>Cyber Hub</strong><span>Gurugram · <b data-point-pin>122002</b></span><small>Cap car 120 · bike 40</small></button>
-                <button type="button" data-point="DLF Cyber City"><strong>DLF Cyber City</strong><span>Gurugram · <b data-point-pin>122002</b></span><small>Cap car 80 · bike 20</small></button>
-                <button type="button" data-point="Select Citywalk"><strong>Select Citywalk</strong><span>Delhi · <b data-point-pin>122002</b></span><small>Cap car 60 · bike 15</small></button>
-              </div>
-            </section>
-            <form class="svc-card is-dim" data-book-card="3" data-book-form>
-              <h2>Step 3 — Vehicle, entry time &amp; duration</h2>
-              <div class="svc-pair">
-                <label>Vehicle number<input name="vehicle" value="DL01AB1234" /></label>
-                <label>Vehicle type<select name="vtype"><option>Car</option><option>SUV</option><option>Bike</option></select></label>
-              </div>
-              <label>Entry window starts<input name="from" type="datetime-local" /></label>
-              <label>Duration<select name="hours"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="4">4 hours</option></select></label>
-              <button class="svc-submit" type="submit">Get quote</button>
-            </form>
-          </div>
-          <aside class="svc-card ditto-summary">
-            <h2>Booking summary</h2>
-            <dl>
-              <div><dt>Parking point</dt><dd data-sum-point>—</dd></div>
-              <div><dt>Vehicle type</dt><dd>Car</dd></div>
-              <div><dt>Vehicle</dt><dd>DL01AB1234</dd></div>
-              <div><dt>Duration</dt><dd>2 hours</dd></div>
-              <div><dt>Est. rate / hr</dt><dd>₹60</dd></div>
-              <div><dt>Quote</dt><dd>₹120</dd></div>
-            </dl>
-          </aside>
-        </div>
+      <div style="margin-top:16px">
+        <a class="svc-submit" href="#qr-scan" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none"><span class="mi">qr_code_scanner</span> Start QR parking session</a>
       </div>
-      <div data-park-view="slots" hidden>
-        <button class="svc-back" type="button" data-park="hub"><span class="mi">arrow_back</span>Parking</button>
-        <div class="svc-card svc-slot-head"><p class="svc-kicker">Live Status</p><h1>Active Slots</h1></div>
-        <div class="svc-card ditto-slots">
-          <article><header><strong>B12</strong><span class="svc-pill">Active</span></header><p>Cyber Hub · DL 01 AB 1234 · until 8:30 PM</p></article>
-          <article><header><strong>A4</strong><span class="svc-pill">Expiring</span></header><p>DLF Cyber City · HR 26 DK 9081 · until 6:10 PM</p></article>
-          <article><header><strong>C2</strong><span class="svc-pill">Active</span></header><p>Select Citywalk · DL 8C AX 4410 · until 9:00 PM</p></article>
-          <article><header><strong>P1</strong><span class="svc-pill">Available</span></header><p>Cyber Hub · open bay</p></article>
-        </div>
-      </div>
-      <div data-park-view="history" hidden>
-        <button class="svc-back" type="button" data-park="hub"><span class="mi">arrow_back</span>Parking</button>
-        <h1>Parking history</h1>
-        <p class="svc-muted">Past and active bookings on ParkPe.</p>
-        <article class="svc-card ditto-history"><div><strong>Cyber Hub, Gurugram</strong><p>DL 01 AB 1234 · Active</p><small>Today, 4:10 PM – 8:30 PM</small></div><b>₹120</b></article>
-        <article class="svc-card ditto-history"><div><strong>DLF Cyber City</strong><p>DL 01 AB 1234 · Paid</p><small>18 Nov 2026, 10:00 AM – 1:00 PM</small></div><b>₹180</b></article>
-        <article class="svc-card ditto-history"><div><strong>Select Citywalk</strong><p>DL 8C AX 4410 · Due</p><small>12 Nov 2026, 2:00 PM – 5:00 PM</small></div><b>₹240</b></article>
+      <div style="margin-top:16px;display:grid;gap:12px">
+        ${histHtml}
       </div>
     </section>`;
 }
@@ -1439,141 +1121,57 @@ function settingsScreen() {
 }
 
 function profileScreen() {
+  const user = (window.ParkpeData && window.ParkpeData.user) || null;
+  const prof = (window.ParkpeData && window.ParkpeData.profile) || {};
+  const name = prof.display_name || (user && user.display_name) || (user && user.email ? user.email.split("@")[0] : "Guest");
+  const email = (user && user.email) || "Not signed in";
+  const mobile = prof.mobile || "—";
+  const city = prof.city || "";
+  const address = prof.address || "";
+  const initials = name.slice(0, 2).toUpperCase();
+  const vehicles = (window.ParkpeData && window.ParkpeData.vehicles) || [];
   return `
     <section class="svc pf">
       <div class="pf-banner">
         <img src="../assets/img/landing-page/parking-location.svg" alt="" />
         <div class="pf-id">
-          <label class="pf-photo">PU<input type="file" accept="image/*" data-photo hidden /></label>
+          <div class="pf-photo">${esc(initials)}</div>
           <div>
-            <h1>ParkPe User</h1>
-            <p><span class="mi">mail</span> user@parkpe.in</p>
-            <p><span class="mi">call</span> +91 98000 00010</p>
-            <div class="pf-chips"><span><span class="mi">person</span> Customer</span><span><span class="mi">check</span> Email on file</span></div>
+            <h1>${esc(name)}</h1>
+            <p><span class="mi">mail</span> ${esc(email)}</p>
+            <p><span class="mi">call</span> ${esc(mobile)}</p>
+            <div class="pf-chips"><span><span class="mi">person</span> Customer</span><span><span class="mi">directions_car</span> ${vehicles.length} vehicle${vehicles.length === 1 ? "" : "s"}</span></div>
           </div>
         </div>
-        <button type="button" class="pf-meter" data-profile="address">
-          <span class="pf-ring">67%</span>
-          <span><strong>Profile Complete</strong><small>Complete your details so your ParkPe account stays accurate.</small></span>
-          <i></i>
-          <em><span class="mi">work</span> 2 items incomplete</em>
-        </button>
       </div>
       <div class="pf-tabs">
-        <button type="button" class="is-on" data-tab="overview"><span class="mi">dashboard</span>Overview</button>
-        <button type="button" data-tab="personal"><span class="mi">person</span>Personal</button>
-        <button type="button" data-tab="address"><span class="mi">location_on</span>Address</button>
-        <button type="button" data-tab="security"><span class="mi">shield</span>Security</button>
+        <button type="button" class="is-on" data-tab="personal"><span class="mi">person</span>Profile &amp; Address</button>
+        <button type="button" data-tab="security"><span class="mi">shield</span>Password &amp; Sessions</button>
       </div>
-      <div data-panel="overview">
-        <div class="pf-cards">
-          <article><span class="mi tone-park">local_parking</span><strong>Parking</strong><small>Bookings &amp; history</small></article>
-          <article><span class="mi tone-tag">toll</span><strong>FASTag</strong><small>Recharge &amp; trips</small></article>
-          <article><span class="mi tone-bill">receipt_long</span><strong>BBPS</strong><small>Bill payments</small></article>
-          <article><span class="mi tone-wallet">account_balance_wallet</span><strong>Wallet</strong><small>Balance &amp; methods</small></article>
-        </div>
-        <div class="pf-split">
-          <section class="svc-card">
-            <h2>Completion Checklist</h2>
-            <ul class="pf-check">
-              <li class="is-done"><span></span>Full name added</li>
-              <li class="is-done"><span></span>Mobile number</li>
-              <li class="is-done"><span></span>Email on account</li>
-              <li class="is-done"><span></span>Vehicle details</li>
-              <li><span></span>Address line &amp; PIN <button type="button" data-profile="address">Fix →</button></li>
-              <li><span></span>City &amp; state <button type="button" data-profile="address">Fix →</button></li>
-            </ul>
-          </section>
-          <section class="svc-card">
-            <h2>Quick Actions</h2>
-            <button type="button" data-profile="personal"><span class="mi">person</span><span><strong>Update personal details</strong><small>Name, mobile, vehicle</small></span></button>
-            <button type="button" data-profile="address"><span class="mi">location_on</span><span><strong>Complete address</strong><small>PIN, city, state</small></span></button>
-            <button type="button" data-profile="security"><span class="mi">shield</span><span><strong>OTP &amp; security</strong><small>Delivery channel for login codes</small></span></button>
-          </section>
-        </div>
-      </div>
-      <form class="svc-card" data-panel="personal" hidden>
-        <h2>Personal Information</h2>
-        <div class="pf-photo-row">
-          <span>PU</span>
-          <label class="svc-submit">Change Photo<input type="file" accept="image/*" data-photo hidden /></label>
-          <p>Preview updates instantly above. Photos are not saved to your account yet — only this browser session.</p>
-        </div>
+      <form class="svc-card" data-panel="personal" data-parkpe-profile-form>
+        <h2>Personal &amp; Address Details</h2>
         <div class="svc-pair">
-          <label>Full Name<input name="fullName" value="ParkPe User" /></label>
-          <label>Mobile Number<input name="mobile" value="9800000010" /></label>
-          <label class="ditto-span">Email<input name="email" value="user@parkpe.in" readonly /><small>Email cannot be changed from here</small></label>
-          <label>Vehicle Name<input name="vehicleName" value="Hyundai Creta" /></label>
-          <label>Vehicle Number<input name="vehicleNumber" value="DL 01 AB 1234" /></label>
+          <label>Full Name<input name="display_name" value="${esc(prof.display_name || "")}" placeholder="Your full name" /></label>
+          <label>Mobile Number<input value="${esc(mobile)}" readonly /></label>
+          <label class="ditto-span">Email<input value="${esc(email)}" readonly /><small>Account email cannot be changed from here</small></label>
+          <label>City<input name="city" value="${esc(city)}" placeholder="City" /></label>
+          <label class="ditto-span">Address<input name="address" value="${esc(address)}" placeholder="House / flat, street, PIN" /></label>
         </div>
-        <button class="svc-submit" type="submit">Save Personal Info</button>
-      </form>
-      <form class="svc-card" data-panel="address" hidden>
-        <h2>Address Details</h2>
-        <label>Address Line 1<input name="addressLine1" placeholder="House/flat, street" /></label>
-        <label>Address Line 2 <small>(optional)</small><input name="addressLine2" placeholder="Landmark, area" /></label>
-        <div class="ditto-pinrow">
-          <label>Pincode<input name="pincode" placeholder="6-digit PIN" /></label>
-          <button type="button" disabled title="PIN lookup is not connected yet">Lookup</button>
-          <label>City<input name="city" placeholder="City" /></label>
-        </div>
-        <div class="svc-pair">
-          <label>State<input name="state" placeholder="State" /></label>
-          <label>Country<input name="country" value="India" /></label>
-        </div>
-        <button class="svc-submit" type="submit">Save Address</button>
+        <p class="svc-muted" data-profile-msg></p>
+        <button class="svc-submit" type="submit">Save Profile</button>
       </form>
       <div data-panel="security" hidden>
+        <form class="svc-card" data-parkpe-password-form>
+          <h2>Change account password</h2>
+          <label>Current password<input type="password" name="current_password" required autocomplete="current-password" /></label>
+          <label>New password (min 12 chars)<input type="password" name="new_password" required minlength="12" autocomplete="new-password" /></label>
+          <p class="svc-muted" data-password-msg></p>
+          <button class="svc-submit" type="submit">Update password</button>
+        </form>
         <section class="svc-card">
-          <h2>Account password</h2>
-          <p class="svc-muted">Forgot your password? We can email a secure link to user@parkpe.in. The message does not confirm whether the account exists.</p>
-          <div class="ditto-row">
-            <button type="button" data-reset="email">Email me a reset link</button>
-            <button type="button" data-reset="sms">SMS OTP to my mobile</button>
-          </div>
+          <h2>Active sessions</h2>
+          <div data-parkpe-auth-sessions><p class="svc-muted">Loading sessions…</p></div>
         </section>
-        <form class="svc-card">
-          <h2>OTP delivery preference</h2>
-          <p class="svc-muted">Choose where login OTP should be delivered. You can change this any time.</p>
-          <div class="pf-otp">
-            <label><input type="radio" name="otp" value="email" checked /> Email</label>
-            <label><input type="radio" name="otp" value="sms" /> SMS</label>
-            <label><input type="radio" name="otp" value="push" /> Push Notifications</label>
-            <label><input type="radio" name="otp" value="both" /> SMS + Email</label>
-          </div>
-          <button class="svc-submit" type="submit">Save OTP preference</button>
-        </form>
-        <form class="svc-card">
-          <h2>Transaction PIN (TPIN) requirement</h2>
-          <p class="svc-muted">When enabled, payments that debit your ParkPe wallet require your TPIN. ParkPe voucher payments use your voucher PIN instead.</p>
-          <label class="ditto-check"><input type="checkbox" checked /> Require TPIN for wallet debits</label>
-          <button class="svc-submit" type="submit">Save TPIN requirement</button>
-        </form>
-        <form class="svc-card">
-          <h2>Session &amp; transaction PINs</h2>
-          <p class="svc-muted"><strong>Session PIN</strong> — 4 digits to sign in again after your browser session expires. <strong>TPIN</strong> — separate 4 digits for wallet debits.</p>
-          <label>Account password<input type="password" name="password" autocomplete="current-password" /></label>
-          <div class="svc-two">
-            <div>
-              <h3>Session re-login PIN</h3>
-              <p class="svc-muted">4 digits. Avoid repeats such as 1111.</p>
-              <input type="password" name="session" maxlength="4" inputmode="numeric" />
-              <div class="ditto-row">
-                <button class="svc-submit" type="submit">Save session PIN</button>
-                <button type="button" data-clear-pin="session">Remove session PIN</button>
-              </div>
-            </div>
-            <div>
-              <h3>Transaction PIN (TPIN)</h3>
-              <p class="svc-muted">Used for wallet debits. Different from session PIN and voucher PIN.</p>
-              <input type="password" name="tpin" maxlength="4" inputmode="numeric" />
-              <div class="ditto-row">
-                <button class="svc-submit" type="submit">Save TPIN</button>
-                <button type="button" data-clear-pin="tpin">Remove TPIN</button>
-              </div>
-            </div>
-          </div>
-        </form>
       </div>
     </section>`;
 }
@@ -1582,28 +1180,7 @@ function notificationsScreen() {
   return `
     <section class="svc nt">
       <h1>Notifications</h1>
-      <div class="nt-tabs">
-        <button type="button" class="is-on" data-note-tab="all">All</button>
-        <button type="button" data-note-tab="unread">Unread</button>
-        <button type="button" data-note-tab="important">Important</button>
-      </div>
-      <ul>
-        <li class="is-unread" data-note data-read="0" data-priority="important">
-          <button type="button" data-go="dashboard"><strong>PUC expires in 18 days</strong><p>DL 01 AB 1234 · renew the certificate before it lapses.</p><small>vehicle · important</small></button>
-          <button type="button" data-mark>Mark read</button>
-        </li>
-        <li class="is-unread" data-note data-read="0" data-priority="important">
-          <button type="button" data-go="dashboard"><strong>Insurance has expired</strong><p>HR 26 DK 9081 · the policy date is in the past.</p><small>vehicle · important</small></button>
-          <button type="button" data-mark>Mark read</button>
-        </li>
-        <li class="is-unread" data-note data-read="0" data-priority="normal">
-          <button type="button" data-go="fastag"><strong>FASTag balance low</strong><p>HR 26 DK 9081 is below ₹200.</p><small>fastag · normal</small></button>
-          <button type="button" data-mark>Mark read</button>
-        </li>
-        <li data-note data-read="1" data-priority="normal">
-          <button type="button" data-go="parking"><strong>Parking session closed</strong><p>Cyber Hub · DL 01 AB 1234 · ₹120 paid.</p><small>parking · normal</small></button>
-        </li>
-      </ul>
+      <p class="svc-muted">No active notifications on this account.</p>
     </section>`;
 }
 
@@ -1877,6 +1454,17 @@ function onClick(event) {
     const button = root.querySelector(`.pf-tabs [data-tab="${id}"]`);
     if (button) button.click();
   }
+  const parkpeTxnFilter = event.target.closest("[data-parkpe-txn-filter]");
+  if (parkpeTxnFilter && root.contains(parkpeTxnFilter)) {
+    parkpeTxnFilter.parentElement.querySelectorAll("[data-parkpe-txn-filter]").forEach((b) => b.classList.toggle("is-on", b === parkpeTxnFilter));
+    const mode = parkpeTxnFilter.dataset.parkpeTxnFilter || "all";
+    const query = (root.querySelector("[data-txn-search]")?.value || "").trim().toLowerCase();
+    root.querySelectorAll("[data-txn]").forEach((row) => {
+      const stateMatch = mode === "all" || row.dataset.txnState === mode;
+      const textMatch = !query || row.textContent.toLowerCase().includes(query);
+      row.hidden = !(stateMatch && textMatch);
+    });
+  }
   const thread = event.target.closest("[data-thread]");
   if (thread && root.contains(thread)) {
     thread.parentElement.querySelectorAll("[data-thread]").forEach((row) => row.classList.toggle("is-on", row === thread));
@@ -1935,8 +1523,11 @@ function onInput(event) {
   if (event.target.matches("[data-brand-search]")) applyBrandFilters(root);
   if (event.target.matches("[data-txn-search]")) {
     const query = event.target.value.trim().toLowerCase();
+    const mode = root.querySelector("[data-parkpe-txn-filter].is-on")?.dataset.parkpeTxnFilter || "all";
     root.querySelectorAll("[data-txn]").forEach((row) => {
-      row.hidden = query && !row.textContent.toLowerCase().includes(query);
+      const stateMatch = mode === "all" || row.dataset.txnState === mode;
+      const textMatch = !query || row.textContent.toLowerCase().includes(query);
+      row.hidden = !(stateMatch && textMatch);
     });
   }
   if (event.target.matches("[data-voucher-search]")) {
@@ -2017,21 +1608,76 @@ async function onSubmit(event) {
   if (form.matches("[data-qr-form]")) {
     const box = root.querySelector("[data-qr-result]");
     box.hidden = false;
-    box.innerHTML = `<strong>Parking slip</strong><p>Type: parking · Cyber Hub, bay B12</p><a href="#parking">Open in ParkPe</a>`;
+    box.replaceChildren();
     const site = String(data.get("site_code") || "").trim();
     const bay = String(data.get("bay") || "").trim();
     const vehicle = String(data.get("vehicle") || "").trim();
-    if (site && bay && vehicle && globalThis.ParkpeHub) {
-      const result = await globalThis.ParkpeHub.initiateSession(
-        { site_code: site, bay, vehicle },
-        crypto.randomUUID(),
-      );
-      const line = document.createElement("p");
-      line.textContent = result.ok
-        ? `Session ${result.data.reference} is ${result.data.state}.`
-        : result.error;
-      box.append(line);
+    if (!site || !bay || !vehicle || !globalThis.ParkpeHub) {
+      box.textContent = "Enter site code, bay, and vehicle to start a live QR session.";
+      return;
     }
+    const keyName = "parkpe-session-attempt";
+    let key = sessionStorage.getItem(keyName);
+    if (!key) {
+      key = crypto.randomUUID();
+      sessionStorage.setItem(keyName, key);
+    }
+    const result = await globalThis.ParkpeHub.initiateSession(
+      { site_code: site, bay, vehicle },
+      key,
+    );
+    if (result.ok || result.code === "idempotency_conflict") sessionStorage.removeItem(keyName);
+    const title = document.createElement("strong");
+    title.textContent = result.ok ? `Session ${result.data.reference}` : "Session failed";
+    const line = document.createElement("p");
+    line.textContent = result.ok
+      ? `State: ${result.data.state} · Vehicle: ${result.data.vehicle} · ${result.data.site_code}/${result.data.bay}`
+      : result.error;
+    box.append(title, line);
+    if (result.ok && window.ParkpeReload) window.ParkpeReload();
+    return;
+  }
+  if (form.matches("[data-parkpe-add-vehicle]")) {
+    const msg = form.querySelector("[data-add-vehicle-msg]");
+    if (msg) msg.textContent = "Saving…";
+    if (!globalThis.ParkpeHub) return;
+    const res = await globalThis.ParkpeHub.addVehicle({
+      registration: String(data.get("registration") || "").trim(),
+      make_model: String(data.get("make_model") || "").trim(),
+      color: String(data.get("color") || "").trim(),
+      fuel_type: String(data.get("fuel_type") || "").trim(),
+    });
+    if (!res.ok) {
+      if (msg) msg.textContent = res.error || "Could not add vehicle.";
+      return;
+    }
+    toast("Vehicle added.");
+    if (window.ParkpeReload) await window.ParkpeReload();
+    return;
+  }
+  if (form.matches("[data-parkpe-profile-form]")) {
+    const msg = form.querySelector("[data-profile-msg]");
+    if (msg) msg.textContent = "Saving…";
+    if (!window.ParkpeSession) return;
+    const res = await window.ParkpeSession.updateProfile({
+      display_name: String(data.get("display_name") || "").trim(),
+      city: String(data.get("city") || "").trim(),
+      address: String(data.get("address") || "").trim(),
+    });
+    if (msg) msg.textContent = res.ok ? "Profile updated." : (res.data.error || "Could not update profile.");
+    if (res.ok && window.ParkpeReload) await window.ParkpeReload();
+    return;
+  }
+  if (form.matches("[data-parkpe-password-form]")) {
+    const msg = form.querySelector("[data-password-msg]");
+    if (msg) msg.textContent = "Updating…";
+    if (!window.ParkpeSession) return;
+    const res = await window.ParkpeSession.changePassword(
+      String(data.get("current_password") || ""),
+      String(data.get("new_password") || "")
+    );
+    if (msg) msg.textContent = res.ok ? "Password changed." : (res.data.error || "Password update failed.");
+    if (res.ok) form.reset();
     return;
   }
   if (form.matches("[data-ride-form]")) {
@@ -2058,21 +1704,8 @@ async function onSubmit(event) {
     root.querySelector("[data-rc-ok]")?.removeAttribute("hidden");
     return;
   }
-  if (form.matches("[data-book-form]")) {
-    const slip = root.querySelector("[data-book-slip]");
-    if (slip) slip.hidden = false;
-    const vehicle = String(data.get("vehicle") || "DL 01 AB 1234");
-    root.querySelectorAll("[data-slip-vehicle]").forEach((node) => { node.textContent = vehicle; });
-    toast("Quote stays on this screen until the parking API is connected.");
-    return;
-  }
   if (form.matches("[data-offer-form]")) {
     toast("Trip stays on this screen until the CoPilot API is connected.");
-    return;
-  }
-  if (form.closest("[data-voucher-view='balance']")) {
-    root.querySelector("[data-balance-value]").textContent = "Rs 1250.00";
-    root.querySelector("[data-balance-note]").textContent = "Sample balance for PP-20481. Live voucher lookup is not connected.";
     return;
   }
   toast("Saved on this screen. It will sync when this service API is connected.");
@@ -2080,17 +1713,60 @@ async function onSubmit(event) {
 
 let wired = false;
 
+async function hydrateProfileSessions(root) {
+  const host = root.querySelector("[data-parkpe-auth-sessions]");
+  if (!host || !window.ParkpeSession) return;
+  const res = await window.ParkpeSession.sessions();
+  if (!res.ok) {
+    host.innerHTML = `<p class="svc-muted">${esc(res.data.error || "Sign in to view sessions.")}</p>`;
+    return;
+  }
+  const rows = res.data.sessions || [];
+  if (!rows.length) {
+    host.innerHTML = `<p class="svc-muted">No active sessions.</p>`;
+    return;
+  }
+  host.innerHTML = rows
+    .map(
+      (s) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #e2e8f0">
+        <div><strong>${esc(s.role)}</strong> ${s.current ? '<span class="svc-pill">Current</span>' : ""}<br><small>${esc(s.scope || "session")}</small></div>
+        ${s.current ? "" : `<button type="button" data-parkpe-revoke-sess="${esc(s.id)}">Revoke</button>`}
+      </div>`
+    )
+    .join("");
+}
+
 window.ParkpeScreens = {
   mount(root, name) {
     const draw = screens[name];
     root.innerHTML = draw ? draw() : hero("ParkPe", name, "");
     if (!wired) {
-      root.addEventListener("click", onClick);
+      root.addEventListener("click", async (event) => {
+        const delBtn = event.target.closest("[data-delete-vehicle]");
+        if (delBtn && globalThis.ParkpeHub) {
+          const res = await globalThis.ParkpeHub.deleteVehicle(delBtn.dataset.deleteVehicle);
+          if (res.ok) {
+            toast("Vehicle removed.");
+            if (window.ParkpeReload) await window.ParkpeReload();
+          } else {
+            toast(res.error || "Could not remove vehicle.");
+          }
+          return;
+        }
+        const revBtn = event.target.closest("[data-parkpe-revoke-sess]");
+        if (revBtn && window.ParkpeSession) {
+          await window.ParkpeSession.revokeSession(revBtn.dataset.parkpeRevokeSess);
+          hydrateProfileSessions(root);
+          return;
+        }
+        onClick(event);
+      });
       root.addEventListener("input", onInput);
       root.addEventListener("change", onChange);
       root.addEventListener("submit", onSubmit);
       wired = true;
     }
+    if (name === "profile") hydrateProfileSessions(root);
   },
 };
 })();

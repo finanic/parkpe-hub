@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="24" fill="#006491"/>
+  <text x="60" y="47" font-family="Arial,sans-serif" font-size="8" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">Domino's</text>
+  <!-- Domino tile -->
+  <rect x="38" y="58" width="44" height="26" rx="5" fill="#fff" opacity="0.95"/>
+  <line x1="60" y1="58" x2="60" y2="84" stroke="#006491" stroke-width="2"/>
+  <circle cx="48" cy="66" r="3" fill="#E31837"/>
+  <circle cx="48" cy="76" r="3" fill="#006491"/>
+  <circle cx="72" cy="62" r="3" fill="#E31837"/>
+  <circle cx="72" cy="71" r="3" fill="#E31837"/>
+  <circle cx="72" cy="80" r="3" fill="#E31837"/>
+</svg>

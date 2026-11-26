@@ -1,0 +1,1 @@
+../../backend/auth/console/qr.js

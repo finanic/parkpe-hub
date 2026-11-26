@@ -6,6 +6,8 @@ This process reads them. It does not write auth.sqlite.
 
 DJANGO_SECRET_KEY, when set, comes from the environment. An empty value
 becomes a per-process key so nothing secret is stored in the repo.
+Kaleyra SMS settings are read by integrations/kaleyra.py from the
+environment. They are not Django settings.
 """
 
 from __future__ import annotations

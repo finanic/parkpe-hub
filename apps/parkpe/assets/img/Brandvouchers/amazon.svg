@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="24" fill="#FF9900"/>
+  <text x="60" y="52" font-family="Arial,sans-serif" font-size="11" font-weight="900" fill="#131921" text-anchor="middle" dominant-baseline="middle">amazon</text>
+  <!-- Arrow smile -->
+  <path d="M36 70 Q60 84 84 70" fill="none" stroke="#131921" stroke-width="3" stroke-linecap="round"/>
+  <path d="M80 66 L84 70 L80 74" fill="none" stroke="#131921" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

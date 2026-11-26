@@ -1,11 +1,11 @@
 # apps/backend
 
-One API folder for ParkPe and PaySwap. `make hub` runs `run.py`, the auth server on port 4600 (`auth/`). Django and Django REST Framework serve `/api/v1/` when you start `manage.py` on port 4610.
+One API folder for ParkPe and PaySwap. `make hub` runs `run.py`, the auth server on port 4600 (`auth/`). `make api` runs Django `/api/v1/` on port 4610.
 
 ```
 python apps/backend/manage.py check
 python apps/backend/manage.py test tests
-python apps/backend/manage.py runserver 127.0.0.1:4610
+make api
 ```
 
 `/api/v1` calls `GET /api/auth/me` on port 4600 (`AUTH_BASE_URL`, default `http://127.0.0.1:4600`) with the `auth_access` cookie. That server has to be up for a real sign-in. Tests stub that call.

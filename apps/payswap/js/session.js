@@ -5,13 +5,32 @@
    as ROLE_RETAILER. Paths are not copied into that package.
    Every call hits http://127.0.0.1:4600 with X-Auth-Request.
    Retailer creation stays on apps/backend/auth/console/console.js.
-   AuthApp._require_operator rejects this origin.
    ParkPe must not load this file.
+
+   device_id is a stable browser id (localStorage). Auth binds one login
+   family per device so refresh/re-login on the same browser does not
+   stack duplicate sessions in Profile.
 */
 
 import { Role } from "../packages/contracts/index.js";
 
 const API = "http://127.0.0.1:4600";
+const DEVICE_KEY = "payswap-device-id";
+
+function deviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (id && id.length >= 16) return id;
+    id =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `ps-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+    localStorage.setItem(DEVICE_KEY, id);
+    return id;
+  } catch (_err) {
+    return `ps-ephemeral-${Date.now().toString(36)}`;
+  }
+}
 
 async function call(path, payload) {
   const headers = { "X-Auth-Request": "1" };
@@ -19,7 +38,8 @@ async function call(path, payload) {
   if (payload !== undefined) {
     init.method = "POST";
     headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(payload);
+    const body = { ...payload, device_id: deviceId() };
+    init.body = JSON.stringify(body);
   }
   try {
     const response = await fetch(API + path, init);
@@ -31,6 +51,7 @@ async function call(path, payload) {
 }
 
 window.PayswapSession = {
+  deviceId,
   current() {
     return call("/api/auth/me");
   },
@@ -48,5 +69,20 @@ window.PayswapSession = {
   },
   signOut() {
     return call("/api/auth/logout", {});
+  },
+  profile() {
+    return call("/api/auth/profile");
+  },
+  updateProfile(body) {
+    return call("/api/auth/profile", body);
+  },
+  changePassword(body) {
+    return call("/api/auth/password/change", body);
+  },
+  sessions() {
+    return call("/api/auth/sessions");
+  },
+  revokeOtherSessions() {
+    return call("/api/auth/sessions/revoke", {});
   },
 };

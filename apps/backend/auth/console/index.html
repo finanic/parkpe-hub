@@ -6,22 +6,40 @@
     <title>Backend · Sign in</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/console.css?v=8" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/console.css?v=53" />
   </head>
   <body>
     <a class="skip" href="#content">Skip to desk</a>
     <div class="gate" id="gate">
+      <section class="gate-context" aria-label="Backend control desk">
+        <div class="gate-context-brand">
+          <span class="gate-context-mark" aria-hidden="true">P</span>
+          <span>PaySwap <small>CONTROL DESK</small></span>
+        </div>
+        <p class="kicker">Operations workspace</p>
+        <h2 class="gate-context-title">Accounts, retailers, and settlements in one quiet desk.</h2>
+        <p class="gate-context-copy">Sign in with your authenticator before any records open. Built for clear control — not clutter.</p>
+        <ul class="gate-context-points">
+          <li><span aria-hidden="true">01</span> Account and verification control</li>
+          <li><span aria-hidden="true">02</span> PaySwap retailer operations</li>
+          <li><span aria-hidden="true">03</span> Audit-ready activity and reporting</li>
+        </ul>
+      </section>
+      <div class="gate-panel">
       <form class="gate-card" id="login" data-view="login">
-        <p class="brand-mark">Backend</p>
-        <p class="kicker">Admin</p>
-        <h1>Sign in</h1>
-        <p>The desk stays closed until this account signs in and the authenticator is on.</p>
-        <label>Email<input name="email" type="email" autocomplete="username" spellcheck="false" required /></label>
+        <p class="brand-mark">Admin access</p>
+        <p class="kicker">Secure sign in</p>
+        <h1>Welcome back</h1>
+        <p>Open the operations desk. Your authenticator is required before any records are shown.</p>
+        <label>Email<input name="email" type="email" autocomplete="username" spellcheck="false" required placeholder="name@company.com" /></label>
         <label>Password
           <span class="field">
             <input name="password" type="password" autocomplete="current-password" required />
-            <button class="reveal" type="button" data-reveal aria-label="Show password">Show</button>
+            <button class="reveal" type="button" data-reveal aria-label="Show password">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>
+            </button>
           </span>
         </label>
         <p class="error" data-error hidden></p>
@@ -33,11 +51,14 @@
         <p class="kicker">First admin</p>
         <h1>Create the account</h1>
         <p>This can be done once. Use 12 or more characters, and keep the email out of the password.</p>
-        <label>Email<input name="email" type="email" autocomplete="username" spellcheck="false" required /></label>
+        <label>Email<input name="email" type="email" autocomplete="username" spellcheck="false" required placeholder="name@company.com" /></label>
         <label>Password
           <span class="field">
-            <input name="password" type="password" autocomplete="new-password" minlength="12" required />
-            <button class="reveal" type="button" data-reveal aria-label="Show password">Show</button>
+            <input name="password" type="password" autocomplete="new-password" minlength="12" required placeholder="12 or more characters" />
+            <button class="reveal" type="button" data-reveal aria-label="Show password">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>
+            </button>
           </span>
         </label>
         <p class="error" data-error hidden></p>
@@ -48,7 +69,7 @@
         <p class="kicker">Second step</p>
         <h1>Authenticator code</h1>
         <p>Enter the 6-digit code from the app, or one unused backup code.</p>
-        <label>Code<input name="code" inputmode="numeric" autocomplete="one-time-code" required /></label>
+        <label>Code<input name="code" inputmode="numeric" autocomplete="one-time-code" required placeholder="6-digit code" /></label>
         <p class="error" data-error hidden></p>
         <button class="primary" type="submit">Continue</button>
       </form>
@@ -66,131 +87,1103 @@
         <p class="kicker" data-codes-label hidden>Backup codes</p>
         <p class="secret codes" data-codes hidden></p>
         <form id="enroll-confirm">
-          <label>Code from the app<input name="code" inputmode="numeric" autocomplete="one-time-code" required /></label>
+          <label>Code from the app<input name="code" inputmode="numeric" autocomplete="one-time-code" required placeholder="6-digit code" /></label>
           <p class="error" data-error hidden></p>
           <button class="primary" type="submit">Enable and enter</button>
         </form>
       </section>
+      <section class="gate-card gate-card-done" id="signed-out" data-view="signed-out" hidden>
+        <div class="gate-done-badge" aria-hidden="true">✓</div>
+        <p class="kicker">Session closed</p>
+        <h1>Signed out</h1>
+        <p>The control desk is locked. Sign in again when you need to open records.</p>
+        <button class="primary" type="button" data-show="login">Sign in again</button>
+      </section>
+      </div>
     </div>
 
     <div class="shell" id="home" data-view="home" hidden>
+      <button class="backdrop" type="button" hidden aria-label="Close menu"></button>
       <aside class="sidebar">
-        <p class="brand-mark">Backend</p>
-        <nav class="rooms" aria-label="Admin desk">
-          <p class="nav-label">Desk</p>
-          <button type="button" data-room="overview" class="is-on"><span class="nav-ico" aria-hidden="true"></span>Dashboard</button>
-          <button type="button" data-room="people"><span class="nav-ico" aria-hidden="true"></span>People</button>
-          <button type="button" data-room="verification"><span class="nav-ico" aria-hidden="true"></span>Verification</button>
+        <div class="brand">
+          <div class="mark" aria-hidden="true">P</div>
+          <div>
+            <strong>Payswap</strong>
+            <small>Backend Control Desk</small>
+          </div>
+        </div>
+        <div class="nav-scroll">
+          <p class="nav-label">Workspace</p>
+          <nav class="nav" aria-label="Admin desk">
+            <button type="button" data-room="overview" class="is-on" aria-current="page">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>
+              Overview
+            </button>
+            <button type="button" data-room="people">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Account Hub <span class="count" data-verify-count>0</span>
+            </button>
+            <button type="button" data-room="services">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 8h10M7 12h6M7 16h4"/></svg>
+              API &amp; Services
+            </button>
+          </nav>
           <p class="nav-label">Products</p>
-          <button type="button" data-room="parkpe"><span class="nav-ico" aria-hidden="true"></span>ParkPe</button>
-          <button type="button" data-room="payswap"><span class="nav-ico" aria-hidden="true"></span>PaySwap</button>
-          <button type="button" data-room="money"><span class="nav-ico" aria-hidden="true"></span>Money</button>
-          <p class="nav-label">System</p>
-          <button type="button" data-room="processes"><span class="nav-ico" aria-hidden="true"></span>Processes</button>
-        </nav>
-        <div class="side-foot">
-          <span class="live">Desk open</span>
-          <strong>Admin</strong>
-          <button id="logout" type="button">Sign out</button>
+          <nav class="nav">
+            <button type="button" data-room="parkpe">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17h14l2-5-3-6H6l-3 6 2 5z"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg>
+              ParkPe
+            </button>
+            <button type="button" data-room="payswap">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h15l-3-3M20 17H5l3 3"/><path d="M19 7a7 7 0 0 1 0 10M5 17A7 7 0 0 1 5 7"/></svg>
+              PaySwap
+            </button>
+          </nav>
+          <p class="nav-label">Operations</p>
+          <nav class="nav">
+            <button type="button" data-room="fund-requests">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              Fund Requests <span class="count" data-fund-pending-count>0</span>
+            </button>
+            <button type="button" data-room="reports">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h17"/><path d="m7 15 4-4 3 2 6-7"/></svg>
+              Transaction Reports
+            </button>
+            <button type="button" data-room="processes">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M5.6 5.6l2.1 2.1M3 12h3M5.6 18.4l2.1-2.1M12 18v3M18.4 18.4l-2.1-2.1M18 12h3M18.4 5.6l-2.1 2.1"/><circle cx="12" cy="12" r="4"/></svg>
+              System Health
+            </button>
+            <button type="button" data-room="logs">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8v8l9 5 9-5V8l-9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>
+              Logs
+            </button>
+          </nav>
+        </div>
+        <div class="sidebar-bottom">
+          <div class="profile">
+            <div class="avatar" id="desk-avatar">SA</div>
+            <div>
+              <b id="desk-rank">Super Admin</b>
+              <small>● &nbsp;SECURE SESSION</small>
+            </div>
+          </div>
+          <button class="signout" id="logout" type="button">Sign out</button>
         </div>
       </aside>
       <div class="workspace">
         <header class="top">
-          <div>
-            <p class="crumb" id="crumb">Dashboard</p>
-            <p class="who" id="who"></p>
+          <button class="menu-btn" type="button" aria-label="Open menu" aria-expanded="false">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
+          </button>
+          <div class="top-copy">
+            <p class="crumb" id="crumb">Workspace / Overview</p>
+            <p class="page-title" id="page-title">Dashboard</p>
+          </div>
+          <div class="top-actions">
+            <p class="who" id="who" hidden></p>
+            <label class="search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+              <input id="desk-search" type="search" placeholder="Search anything..." aria-label="Search anything" />
+            </label>
+            <button class="icon-btn" type="button" title="Notifications" data-toast="Notifications panel placeholder" aria-label="Notifications">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+            </button>
+            <button class="icon-btn" id="refresh" type="button" title="Refresh" aria-label="Refresh">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/></svg>
+            </button>
+            <div class="avatar" id="top-avatar" title="Super Admin">SA</div>
           </div>
         </header>
         <main id="content" tabindex="-1">
-          <div data-panel="overview">
-            <div class="stats">
-              <article class="stat"><strong data-count="customer">0</strong><span>Customers</span></article>
-              <article class="stat"><strong data-count="retailer">0</strong><span>Retailers</span></article>
-              <article class="stat"><strong data-count="admin">0</strong><span>Admins</span></article>
+          <div class="dash" data-panel="overview">
+            <div class="welcome">
+              <div>
+                <h1 id="hello">Good morning, Super Admin 👋</h1>
+                <p>Here’s what’s happening across your Payswap ecosystem today.</p>
+              </div>
+              <div class="date" id="today">Wednesday, 25 November 2026</div>
             </div>
-            <section class="card">
-              <h2>Recent auth</h2>
-              <p class="note" data-desk-note></p>
-              <ul class="rows" data-events></ul>
+            <section class="stats">
+              <article class="card stat">
+                <div class="stat-top"><div class="stat-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.8"/></svg></div><span class="delta">Live count</span></div>
+                <div class="stat-num" data-count="customer">0</div>
+                <div class="stat-label">Verified customers</div>
+              </article>
+              <article class="card stat">
+                <div class="stat-top"><div class="stat-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h.01M15 10h.01M9 14h.01M15 14h.01M10 21v-4h4v4"/></svg></div><span class="delta">Live count</span></div>
+                <div class="stat-num" data-count="retailer">0</div>
+                <div class="stat-label">Verified retailers</div>
+              </article>
+              <article class="card stat">
+                <div class="stat-top"><div class="stat-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 3 6-7"/></svg></div><span class="delta" data-overview-bbps-count>0 txns</span></div>
+                <div class="stat-num" data-overview-bbps-today>₹0.00</div>
+                <div class="stat-label">BBPS settled today</div>
+              </article>
+              <article class="card stat">
+                <div class="stat-top"><div class="stat-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><span class="delta" data-overview-topups-pending>0 pending top-ups</span></div>
+                <div class="stat-num" data-overview-wallet-float>₹0.00</div>
+                <div class="stat-label">Total retailer float</div>
+              </article>
+            </section>
+            <section class="grid middle">
+              <article class="card">
+                <div class="panel-head">
+                  <div><h2>7-Day BBPS volume</h2><p>Settled BBPS collections across all retailers</p></div>
+                  <button class="select" type="button" data-jump="payswap">Manage PaySwap →</button>
+                </div>
+                <div class="chart-wrap">
+                  <div class="chart-summary"><strong data-overview-7d-total>₹0.00</strong><span data-overview-7d-meta>Last 7 days settled</span></div>
+                  <div data-overview-series class="series-bars"></div>
+                </div>
+              </article>
+              <article class="card">
+                <div class="panel-head">
+                  <div><h2>System health</h2><p>Live process &amp; provider checks</p></div>
+                  <span class="status" data-overview-health-badge>Checking</span>
+                </div>
+                <div class="health-list" data-overview-health></div>
+              </article>
+            </section>
+            <section class="grid bottom">
+              <article class="card">
+                <div class="panel-head">
+                  <div><h2>Recent activity</h2><p>Recent auth and operational events</p></div>
+                  <button class="select" type="button" data-jump="logs">View logs →</button>
+                </div>
+                <div class="table-wrap">
+                  <table class="activity">
+                    <thead><tr><th>Activity</th><th>User</th><th>Time</th><th>Status</th></tr></thead>
+                    <tbody data-events></tbody>
+                  </table>
+                </div>
+              </article>
+              <article class="card">
+                <div class="panel-head"><div><h2>Quick actions</h2><p>Frequently used admin tasks</p></div></div>
+                <div class="quick-grid">
+                  <button class="quick" type="button" data-jump="fund-requests"><span class="quick-ico" aria-hidden="true">₹</span><span><b>Fund Requests</b><small>Inspect UTRs, approve &amp; audit</small></span></button>
+                  <button class="quick" type="button" data-jump="reports"><span class="quick-ico" aria-hidden="true">≋</span><span><b>Transaction Reports</b><small>Complete BBPS, PG &amp; ledger</small></span></button>
+                  <button class="quick" type="button" data-jump="people"><span class="quick-ico" aria-hidden="true">♙</span><span><b>Users &amp; Services</b><small>KYC, overrides &amp; access</small></span></button>
+                </div>
+              </article>
+            </section>
+            <p class="footer-note" data-desk-note>Payswap Backend Control Desk · Live environment data</p>
+          </div>
+          <div class="room" data-panel="people" hidden>
+            <div class="room-head"><div><p class="eyebrow">Account management</p><h1>Account hub</h1><p>One person record can hold a ParkPe customer role, a PaySwap retailer role, and role-specific verification progress.</p></div></div>
+            <nav class="account-tabs" aria-label="Account hub views"><button class="is-on" type="button" data-account-view="people">Directory</button><button type="button" data-account-view="verification">Verification <span data-verify-count>0</span></button></nav>
+            <section class="account-flow" aria-label="Account management flow"><div><span>1</span><b>Person</b><small>One secure identity and account ID</small></div><div><span>2</span><b>Role</b><small>Customer, retailer, or both</small></div><div><span>3</span><b>Verification</b><small>Role-specific onboarding checks</small></div><div><span>4</span><b>Activity</b><small>Sessions and product records</small></div></section>
+            <div class="people-layout">
+              <div class="people-main">
+              <section class="card directory-card">
+                <div class="panel-head directory-head">
+                  <div><h2>Account directory</h2><p>Find an account, inspect its stored activity, or manage safe account controls.</p></div>
+                  <span class="directory-count" data-people-total>0 accounts</span>
+                </div>
+                <div class="privacy">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <p>Protected information stays private. Passwords, codes, PAN, and Aadhaar are never shown here.</p>
+                </div>
+                <div class="toolbar">
+                  <div class="segments" data-user-filters role="tablist" aria-label="Filter users">
+                    <button class="is-on" type="button" role="tab" aria-selected="true" data-user-filter="all">All <span data-filter-count>0</span></button>
+                    <button type="button" role="tab" aria-selected="false" data-user-filter="customer">Customers <span data-filter-count>0</span></button>
+                    <button type="button" role="tab" aria-selected="false" data-user-filter="retailer">Retailers <span data-filter-count>0</span></button>
+                    <button type="button" role="tab" aria-selected="false" data-user-filter="admin">Admins <span data-filter-count>0</span></button>
+                  </div>
+                  <label class="people-search">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input id="people-filter" type="search" autocomplete="off" placeholder="Search by email, role, or status..." aria-label="Search by email, role, or status" />
+                  </label>
+                </div>
+                <ul class="rows people" data-people></ul>
+              </section>
+              <section class="card profile-file" data-user-file hidden>
+                <div class="panel-head"><div><h2>Account file</h2><p data-user-summary>Select a user to inspect their stored account activity.</p></div><div class="account-id-list" data-user-account-ids hidden></div></div>
+                <div class="file-section file-section-verify" data-user-verify hidden>
+                  <h3>Verification checks</h3>
+                  <div class="verify-profile-checks" data-user-verify-checks></div>
+                </div>
+                <div class="file-section" data-user-kyc hidden>
+                  <h3>KYC record</h3>
+                  <p class="note">Stored onboarding fields for regulator or law-enforcement requests. Treat as confidential.</p>
+                  <dl class="kyc-record" data-user-kyc-fields></dl>
+                </div>
+                <div class="file-section"><h3>Open sessions</h3>
+                <ul class="rows" data-user-sessions></ul>
+                </div>
+                <div data-user-customer hidden>
+                  <div class="file-section-title"><h3>ParkPe customer activity</h3><span class="pill">Stored rows only</span></div>
+                  <p class="note">Stored ParkPe session starts for this email.</p>
+                  <ul class="rows" data-user-parkpe></ul>
+                </div>
+                <div data-user-retailer hidden>
+                  <div class="file-section-title"><h3>Retailer services, payment rails &amp; wallet</h3><span class="pill">Live policy</span></div>
+                  <div class="retailer-admin-box" data-user-retailer-controls>
+                    <p class="note">Loading retailer wallet and permissions…</p>
+                  </div>
+                  <div class="file-section-title" style="margin-top:14px"><h3>PaySwap retailer activity</h3><span class="pill">Stored rows</span></div>
+                  <ul class="rows" data-user-orders></ul>
+                </div>
+              </section>
+              </div>
+              <section class="card add-card">
+              <form id="add-account">
+                <div class="add-card-head"><span class="add-icon" aria-hidden="true">+</span><div><h2>Add account</h2><p>Create an account through the required verification flow.</p></div></div>
+                <fieldset class="role-pick" data-role-pick>
+                  <legend>Account type</legend>
+                  <div class="segments" role="group" aria-label="Account type">
+                    <button type="button" class="is-on" data-add-role="customer" aria-pressed="true">Customer</button>
+                    <button type="button" data-add-role="retailer" aria-pressed="false">Retailer</button>
+                    <button type="button" data-add-role="admin" data-role-admin hidden aria-pressed="false">Admin</button>
+                  </div>
+                </fieldset>
+                <div data-add="details">
+                  <label>Email<input name="email" type="email" autocomplete="off" required placeholder="name@company.com" /></label>
+                  <label data-add-mobile>Mobile<input name="mobile" inputmode="numeric" autocomplete="off" required placeholder="10-digit mobile" /></label>
+                  <label>Password
+                    <span class="field">
+                      <input name="password" type="password" minlength="12" autocomplete="new-password" required placeholder="12 or more characters" />
+                      <button class="reveal" type="button" data-reveal aria-label="Show password">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>
+                      </button>
+                    </span>
+                  </label>
+                </div>
+                <div data-add="codes" hidden>
+                  <label>Email code<input name="email_code" inputmode="numeric" autocomplete="one-time-code" placeholder="Email code" /></label>
+                  <label>SMS code<input name="sms_code" inputmode="numeric" autocomplete="one-time-code" placeholder="SMS code" /></label>
+                </div>
+                <div data-add="aadhaar" hidden>
+                  <p class="note">DigiLocker opens for this retailer. The account is not created yet.</p>
+                </div>
+                <div data-add="aadhaar-done" hidden>
+                  <p class="note">Copy this link if the retailer is not at this desk. After consent, confirm here.</p>
+                  <p class="note link" data-add-link hidden></p>
+                </div>
+                <div data-add="pan" hidden>
+                  <label>PAN<input name="pan" autocapitalize="characters" autocomplete="off" placeholder="ABCDE1234F" /></label>
+                  <label>Name on PAN<input name="pan_name" autocomplete="off" placeholder="Name on the card" /></label>
+                </div>
+                <div data-add="done" hidden>
+                  <p class="add-done-title">Account created</p>
+                  <p class="note" data-add-success><strong data-add-success-email></strong> is ready as <span data-add-success-role></span>.</p>
+                  <p class="hint">The user can sign in on the product app. Codes and documents stay off this desk.</p>
+                </div>
+                <p class="error" data-add-error hidden></p>
+                <button class="primary" type="submit" data-add-submit>Send codes</button>
+                <p class="hint" data-add-hint>Sends an email code and an SMS code. The account is created after both codes match.</p>
+              </form>
+              </section>
+            </div>
+          </div>
+          <div class="room" data-panel="parkpe" hidden>
+            <div class="room-head"><div><p class="eyebrow">Product operations</p><h1>ParkPe activity</h1><p>Only stored sessions appear here. Parking, FASTag, bills, and vouchers stay in the customer product until they have an admin-backed flow.</p></div><span class="room-status">Read-only ledger</span></div>
+            <section class="card room-card">
+              <div class="panel-head"><div><h2>Session starts</h2><p>Recent ParkPe sessions recorded through the shared API.</p></div></div>
+              <ul class="rows" data-parkpe></ul>
             </section>
           </div>
-          <div data-panel="people" hidden>
-            <div class="split">
-              <section class="card">
-                <h2>People</h2>
-                <p class="note">Email, roles, authenticator, and whether sign-in is open. Passwords and codes stay off this list.</p>
-                <ul class="rows" data-people></ul>
-              </section>
-              <section class="card">
-                <form id="add-account">
-                  <h2>Add account</h2>
-                  <label>Account type
-                    <select name="role">
-                      <option value="customer">Customer</option>
-                      <option value="retailer">Retailer</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </label>
-                  <div data-add="details">
-                    <label>Email<input name="email" type="email" autocomplete="off" required /></label>
-                    <label data-add-mobile>Mobile<input name="mobile" inputmode="numeric" autocomplete="off" /></label>
-                    <label>Password<input name="password" type="password" minlength="12" autocomplete="new-password" required /></label>
+          <div class="room" data-panel="payswap" hidden>
+            <div data-payswap-view="hub">
+              <div class="room-head">
+                <div>
+                  <p class="eyebrow">Product operations</p>
+                  <h1>PaySwap management</h1>
+                  <p>Configure retailer defaults, BBPS categories, per-account counters, live collections, and economics from one workspace.</p>
+                </div>
+                <span class="room-status">Live operations</span>
+              </div>
+              <div class="payswap-hub-grid">
+                <button type="button" class="payswap-hub-card" data-payswap-open="policy">
+                  <span class="payswap-hub-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M12 3 3 8v8l9 5 9-5V8l-9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+                  <span class="payswap-hub-kicker">Defaults</span>
+                  <strong>Retailer policy</strong>
+                  <p>Services, Wallet / PG rails, and wallet limits that new retailers inherit.</p>
+                  <span class="payswap-hub-cta">Open policy</span>
+                </button>
+                <button type="button" class="payswap-hub-card" data-payswap-open="bbps">
+                  <span class="payswap-hub-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M4 7h15l-3-3M20 17H5l3 3"/><path d="M19 7a7 7 0 0 1 0 10M5 17A7 7 0 0 1 5 7"/></svg></span>
+                  <span class="payswap-hub-kicker">Bill Pay</span>
+                  <strong>BBPS management</strong>
+                  <p>Choose which bill categories appear on every retailer counter by default.</p>
+                  <span class="payswap-hub-cta">Manage BBPS</span>
+                </button>
+                <button type="button" class="payswap-hub-card" data-payswap-open="retailers">
+                  <span class="payswap-hub-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                  <span class="payswap-hub-kicker">Per account</span>
+                  <strong>Manage retailer services</strong>
+                  <p>Counter access and a BBPS, AEPS, recharge, voucher, or DMT commission sheet for one retailer ID (R00…).</p>
+                  <span class="payswap-hub-cta">Customize counter</span>
+                </button>
+                <button type="button" class="payswap-hub-card" data-payswap-open="activity">
+                  <span class="payswap-hub-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 3 6-7"/></svg></span>
+                  <span class="payswap-hub-kicker">Monitoring</span>
+                  <strong>Live activity</strong>
+                  <p>Recent BBPS collections and voucher orders across retailers.</p>
+                  <span class="payswap-hub-cta">View activity</span>
+                </button>
+                <button type="button" class="payswap-hub-card" data-payswap-open="commission">
+                  <span class="payswap-hub-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+                  <span class="payswap-hub-kicker">Finance</span>
+                  <strong>Economics &amp; tax</strong>
+                  <p>Rates, vendor share or service charge, TDS accruals, and GST invoices.</p>
+                  <span class="payswap-hub-cta">Open finance</span>
+                </button>
+              </div>
+            </div>
+
+            <div data-payswap-view="policy" hidden>
+              <div class="room-head">
+                <div>
+                  <p class="eyebrow">PaySwap · Retailer policy</p>
+                  <h1>Default retailer policy</h1>
+                  <p>New and non-overridden retailers inherit these services, payment modes, and wallet limits.</p>
+                </div>
+                <div class="room-actions">
+                  <button class="select" type="button" data-payswap-open="retailers">Per-retailer overrides</button>
+                  <button class="select" type="button" data-payswap-open="hub">Back</button>
+                </div>
+              </div>
+              <section class="card room-card">
+                <div class="panel-head">
+                  <div>
+                    <h2>Services, rails &amp; limits</h2>
+                    <p>Decide what every retailer gets before any account-level override.</p>
                   </div>
-                  <div data-add="codes" hidden>
-                    <label>Email code<input name="email_code" inputmode="numeric" autocomplete="one-time-code" /></label>
-                    <label>SMS code<input name="sms_code" inputmode="numeric" autocomplete="one-time-code" /></label>
+                </div>
+                <form id="default-policy-form" class="policy-form">
+                  <div class="policy-section">
+                    <h3>Counter services</h3>
+                    <div class="policy-checks" data-default-services-boxes></div>
                   </div>
-                  <div data-add="aadhaar" hidden>
-                    <p class="note">DigiLocker opens for this retailer. The account is not created yet.</p>
+                  <div class="policy-section">
+                    <h3>Payment rails</h3>
+                    <div class="policy-rails">
+                      <label><input type="checkbox" name="allow_wallet_pay" /> Allow Wallet payments</label>
+                      <label><input type="checkbox" name="allow_pg_pay" /> Allow direct Payment Gateway (PG) payments</label>
+                      <label><input type="checkbox" name="allow_pg_topup" /> Allow PG wallet top-ups</label>
+                    </div>
                   </div>
-                  <div data-add="aadhaar-done" hidden>
-                    <p class="note">After the retailer consents in DigiLocker, confirm here.</p>
+                  <div class="policy-section">
+                    <h3>Wallet limits</h3>
+                    <div class="policy-limits">
+                      <label>Default per-txn limit (₹)<input name="default_per_txn_limit" type="number" min="1" step="1" /></label>
+                      <label>Default daily debit limit (₹)<input name="default_daily_debit_limit" type="number" min="1" step="1" /></label>
+                      <label>Default min balance (₹)<input name="default_min_balance" type="number" min="0" step="1" /></label>
+                    </div>
                   </div>
-                  <div data-add="pan" hidden>
-                    <label>PAN<input name="pan" autocapitalize="characters" autocomplete="off" /></label>
-                    <label>Name on PAN<input name="pan_name" autocomplete="off" /></label>
-                  </div>
-                  <p class="error" data-add-error hidden></p>
-                  <button class="primary" type="submit" data-add-submit>Send codes</button>
+                  <div class="policy-commit"><button class="primary" type="submit">Save default policy</button></div>
                 </form>
               </section>
             </div>
+
+            <div data-payswap-view="bbps" hidden>
+              <div class="room-head">
+                <div>
+                  <p class="eyebrow">PaySwap · BBPS</p>
+                  <h1>BBPS management</h1>
+                  <p>Control which bill categories appear on every retailer counter by default.</p>
+                </div>
+                <div class="room-actions">
+                  <button class="select" type="button" data-payswap-open="retailers">Per-retailer overrides</button>
+                  <button class="select" type="button" data-payswap-open="hub">Back</button>
+                </div>
+              </div>
+              <section class="card room-card">
+                <div class="panel-head">
+                  <div>
+                    <h2>Default BBPS categories</h2>
+                    <p>Unchecked categories stay hidden unless a retailer has an Allow override. Turn on Show all for the full catalogue.</p>
+                  </div>
+                  <label class="payswap-inline-check"><input type="checkbox" data-bbps-unrestricted /> Show all categories</label>
+                </div>
+                <div class="policy-form">
+                  <div class="policy-checks" data-default-bbps-cats></div>
+                  <div class="policy-commit"><button class="primary" type="button" data-bbps-cats-save>Save BBPS categories</button></div>
+                </div>
+              </section>
+            </div>
+
+            <div data-payswap-view="retailers" hidden>
+              <div class="room-head">
+                <div>
+                  <p class="eyebrow">PaySwap · Per account</p>
+                  <h1>Manage retailer services</h1>
+                  <p>Select a retailer ID, control their counter, then set that account’s share on each row of the BBPS, AEPS, or other service sheet.</p>
+                </div>
+                <div class="room-actions">
+                  <button class="select" type="button" data-payswap-open="commission" data-econ-target="commission">Economics default</button>
+                  <button class="select" type="button" data-payswap-open="hub">Back</button>
+                </div>
+              </div>
+
+              <section class="card room-card">
+                <div class="panel-head">
+                  <div>
+                    <h2>Select retailer</h2>
+                    <p>Overrides and commission rates apply only to the loaded account ID.</p>
+                  </div>
+                </div>
+                <div class="room-body">
+                  <div class="policy-limits payswap-retailer-picker">
+                    <label>Retailer account
+                      <select data-retailer-svc-select>
+                        <option value="">Select retailer…</option>
+                      </select>
+                    </label>
+                    <button class="primary" type="button" data-retailer-svc-load>Load account</button>
+                  </div>
+                </div>
+              </section>
+
+              <div class="retailer-desk" data-retailer-svc-panel>
+                <div class="commission-empty">
+                  <strong>Select a retailer</strong>
+                  <p>Load an account (R00…) to open counter controls and that retailer’s commission sheet.</p>
+                </div>
+              </div>
+            </div>
+
+            <div data-payswap-view="activity" hidden>
+              <div class="room-head">
+                <div>
+                  <p class="eyebrow">PaySwap · Monitoring</p>
+                  <h1>Live activity</h1>
+                  <p>Recent BBPS collections and voucher orders across retailers.</p>
+                </div>
+                <div class="room-actions">
+                  <button class="select" type="button" data-jump="reports">Full reports</button>
+                  <button class="select" type="button" data-payswap-open="hub">Back</button>
+                </div>
+              </div>
+              <section class="ledger-stats payswap-activity-stats" aria-label="Live activity summary">
+                <article class="card ledger-stat">
+                  <span class="ledger-stat-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 3 6-7"/></svg></span>
+                  <div><strong data-ps-bbps-count>0</strong><small>BBPS rows</small><p data-ps-bbps-pending>0 pending</p></div>
+                </article>
+                <article class="card ledger-stat">
+                  <span class="ledger-stat-icon is-ok" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+                  <div><strong data-ps-bbps-vol>₹0.00</strong><small>BBPS volume</small><p data-ps-bbps-success>0 success</p></div>
+                </article>
+                <article class="card ledger-stat">
+                  <span class="ledger-stat-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h10M7 13h6"/></svg></span>
+                  <div><strong data-ps-voucher-count>0</strong><small>Voucher orders</small><p data-ps-voucher-meta>Recent API orders</p></div>
+                </article>
+              </section>
+              <section class="card room-card">
+                <div class="panel-head">
+                  <div><h2>Live BBPS transactions</h2><p>Sync pending rows directly with Mobikwik. Row actions stay at the far edge.</p></div>
+                </div>
+                <div class="table-wrap" data-desk-bbps-table><p class="note">Loading BBPS transactions…</p></div>
+              </section>
+              <section class="card room-card">
+                <div class="panel-head"><div><h2>Voucher orders</h2><p>Orders recorded through the PaySwap voucher API.</p></div></div>
+                <ul class="rows" data-payswap></ul>
+              </section>
+            </div>
+
+            <div data-payswap-view="commission" hidden>
+              <div data-econ-view="hub">
+                <div class="room-head">
+                  <div>
+                    <p class="eyebrow">PaySwap · Finance</p>
+                    <h1>Economics &amp; tax</h1>
+                    <p>Commission policy and rates first, then TDS accruals and GST invoices.</p>
+                  </div>
+                  <div class="room-actions"><button class="select" type="button" data-payswap-open="hub">Back</button></div>
+                </div>
+                <div class="payswap-hub-grid payswap-hub-grid-3">
+                  <button type="button" class="payswap-hub-card" data-econ-open="commission">
+                    <span class="payswap-hub-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M4 19V5M4 19h17"/><path d="m7 15 4-4 3 2 6-7"/></svg></span>
+                    <span class="payswap-hub-kicker">Rates &amp; split</span>
+                    <strong>Commission</strong>
+                    <p>Policy, BBPS rate catalogue, retailer pass-through, and settlement revenue.</p>
+                    <span class="payswap-hub-cta">Open commission</span>
+                  </button>
+                  <button type="button" class="payswap-hub-card" data-econ-open="tds">
+                    <span class="payswap-hub-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
+                    <span class="payswap-hub-kicker">Section 194H</span>
+                    <strong>TDS</strong>
+                    <p>Rate, threshold, monthly accruals, and deposit marking.</p>
+                    <span class="payswap-hub-cta">Open TDS</span>
+                  </button>
+                  <button type="button" class="payswap-hub-card" data-econ-open="gst">
+                    <span class="payswap-hub-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg></span>
+                    <span class="payswap-hub-kicker">Tax invoices</span>
+                    <strong>GST</strong>
+                    <p>GST on commission and monthly draft invoices for GSTIN retailers.</p>
+                    <span class="payswap-hub-cta">Open GST</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="commission-workspace" data-econ-view="commission" hidden>
+                <div class="room-head">
+                  <div>
+                    <p class="eyebrow">Economics · Commission</p>
+                    <h1>Commission</h1>
+                    <p>Settled commission is first. The rate you set for each biller stays in the catalogue below.</p>
+                  </div>
+                  <div class="room-actions">
+                    <span class="room-status room-status-accent">Settled first</span>
+                    <button class="select" type="button" data-econ-open="hub">Economics</button>
+                  </div>
+                </div>
+
+                <section class="card room-card" id="commission-revenue-card">
+                  <div class="panel-head">
+                    <div>
+                      <h2 data-comm-revenue-title>Settlement revenue</h2>
+                      <p data-comm-revenue-blurb>Money that settled this month. The set rate is the catalogue below, not these figures.</p>
+                    </div>
+                    <div class="room-actions commission-revenue-actions">
+                      <label>Month <input type="month" data-comm-month /></label>
+                      <button class="select" type="button" data-comm-revenue-refresh>Refresh</button>
+                    </div>
+                  </div>
+                  <div data-comm-revenue-totals class="commission-compare room-card-pad"></div>
+                  <div class="table-wrap" data-comm-revenue-table>
+                    <div class="commission-empty">
+                      <strong>No revenue rows yet</strong>
+                      <p>Settlements appear here after successful collections for the selected month.</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="card room-card commission-policy-card">
+                  <div class="panel-head">
+                    <div>
+                      <h2>Service &amp; split policy</h2>
+                      <p>Admin share of vendor commission; retailer gets the rest. Choose monetization mode per service.</p>
+                    </div>
+                    <div class="segments" data-comm-service-tabs aria-label="Economics service">
+                      <button type="button" class="is-on" data-comm-service="bbps">BBPS</button>
+                      <button type="button" data-comm-service="recharge">Recharge</button>
+                      <button type="button" data-comm-service="vouchers">Vouchers</button>
+                      <button type="button" data-comm-service="dmt">DMT</button>
+                      <button type="button" data-comm-service="aeps">AEPS</button>
+                      <button type="button" data-comm-service="all">All</button>
+                    </div>
+                  </div>
+                  <p class="note room-card-note" data-comm-service-note>BBPS uses the Mobikwik BBPS table. Other services stay empty until their sheet is imported.</p>
+                  <form id="commission-policy-form" class="policy-form commission-policy-form">
+                    <div class="commission-policy-fields">
+                      <label>Monetization model
+                        <select name="monetization_mode">
+                          <option value="vendor_share">Vendor commission split</option>
+                          <option value="service_charge">Customer service charge</option>
+                        </select>
+                      </label>
+                      <label>Admin share %
+                        <span class="commission-percent-input"><input name="admin_share_percent" type="number" min="0" max="100" step="0.01" inputmode="decimal" /><b>%</b></span>
+                      </label>
+                    </div>
+                    <aside class="commission-policy-explainer" aria-live="polite">
+                      <strong>How the split works</strong>
+                      <p data-comm-split-blurb>Admin share is retained from vendor commission. The remainder is the retailer’s default pass-through until a per-account override is set.</p>
+                      <div class="commission-split-example" data-comm-split-example>
+                        <p class="commission-split-caption">Example · vendor commission ₹2.25</p>
+                        <div class="commission-split-pills">
+                          <span><small>Admin</small><b data-comm-ex-admin>₹0.675</b></span>
+                          <span><small>Retailer</small><b data-comm-ex-retailer>₹1.575</b></span>
+                        </div>
+                      </div>
+                    </aside>
+                    <div class="policy-commit">
+                      <button class="primary" type="submit">Save commission policy</button>
+                      <span class="hint">Applies to the selected service tab</span>
+                    </div>
+                  </form>
+                </section>
+
+                <section class="card room-card commission-catalogue-card" id="mobikwik-bbps-table-card">
+                  <div class="panel-head">
+                    <div>
+                      <h2>Set rates</h2>
+                      <p>The commission configured for each biller. This is the rate that will apply, not money already settled.</p>
+                    </div>
+                    <div class="room-actions">
+                      <button class="select" type="button" data-comm-import data-comm-import-bbps>Import sheet</button>
+                      <button class="primary" type="button" data-comm-rates-refresh>Load rates</button>
+                    </div>
+                  </div>
+                  <div class="room-body commission-catalogue-toolbar">
+                    <div class="commission-rate-filters">
+                      <label>BBPS category
+                        <input type="search" data-comm-rates-category list="comm-bbps-cats" placeholder="e.g. ELECTRICITY" />
+                        <datalist id="comm-bbps-cats">
+                          <option value="ELECTRICITY"></option>
+                          <option value="WATER"></option>
+                          <option value="GAS"></option>
+                          <option value="FASTAG"></option>
+                          <option value="PREPAID"></option>
+                          <option value="POSTPAID"></option>
+                          <option value="DTH"></option>
+                          <option value="BROADBAND_POSTPAID"></option>
+                          <option value="INSURANCE"></option>
+                          <option value="LOAN_REPAYMENT"></option>
+                        </datalist>
+                      </label>
+                      <label>Search biller <input type="search" data-comm-rates-q placeholder="Name / biller id / op" /></label>
+                    </div>
+                    <div class="commission-catalogue-stats" data-comm-rates-summary hidden></div>
+                    <p class="note" data-comm-split-banner hidden></p>
+                  </div>
+                  <div class="table-wrap" data-comm-rates-table>
+                    <div class="commission-empty">
+                      <strong>Catalogue not loaded</strong>
+                      <p>Load rates to fill the Mobikwik BBPS catalogue, or import the B2B sheet first.</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="card room-card">
+                  <div class="panel-head">
+                    <div>
+                      <h2>Default retailer pass-through</h2>
+                      <p>Derived from Mobikwik BBPS × admin share. Per-retailer overrides live in Manage retailer services.</p>
+                    </div>
+                    <div class="room-actions"><button class="select" type="button" data-payswap-open="retailers">Manage retailer</button></div>
+                  </div>
+                  <div class="table-wrap" data-comm-retailer-default-table>
+                    <div class="commission-empty">
+                      <strong>Pass-through awaits rates</strong>
+                      <p>Loads with the BBPS rate catalogue above.</p>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div data-econ-view="tds" hidden>
+                <div class="room-head">
+                  <div>
+                    <p class="eyebrow">Economics · TDS</p>
+                    <h1>TDS</h1>
+                    <p>Section 194H for every retailer, 206AA when PAN is missing, and a 197 certificate only for the retailer who holds one.</p>
+                  </div>
+                  <div class="room-actions"><button class="select" type="button" data-econ-open="hub">Economics</button></div>
+                </div>
+                <section class="card room-card">
+                  <div class="panel-head"><div><h2>TDS policy</h2><p>Applies when commission is credited to retailers.</p></div></div>
+                  <form id="tds-policy-form" class="policy-form">
+                    <div class="policy-limits">
+                      <label>TDS % (194H) <input name="tds_rate_percent" type="number" min="0" max="100" step="0.01" /></label>
+                      <label>No-PAN TDS % (206AA) <input name="no_pan_tds_rate_percent" type="number" min="0" max="100" step="0.01" /></label>
+                      <label>TDS FY threshold ₹ <input name="tds_threshold" type="number" min="0" step="1" /></label>
+                      <label>Deductor TAN <input name="deductor_tan" maxlength="10" autocapitalize="characters" placeholder="ABCD12345E" /></label>
+                    </div>
+                    <label class="payswap-inline-check"><input type="checkbox" name="withhold_tds_always" /> Withhold TDS on every commission credit</label>
+                    <p class="note">194H is the rate for a retailer whose PAN is on file. 206AA applies only when that account has no PAN. TAN is the company’s, once for every retailer.</p>
+                    <div class="policy-commit"><button class="primary" type="submit">Save TDS policy</button></div>
+                  </form>
+                </section>
+                <section class="card room-card">
+                  <div class="panel-head">
+                    <div>
+                      <h2>Lower deduction requests</h2>
+                      <p>Retailers file Section 197 on their dashboard. Approve one retailer. Past credits inside the dates are repriced and the extra TDS is credited back.</p>
+                    </div>
+                    <div class="room-actions"><button class="select" type="button" data-tds-cert-refresh>Refresh</button></div>
+                  </div>
+                  <div class="table-wrap" data-tds-cert-table><p class="note">No certificate requests yet.</p></div>
+                </section>
+                <section class="card room-card">
+                  <div class="panel-head">
+                    <div><h2>Monthly TDS accruals</h2><p>Name, PAN, credit dates, and one challan for the open total.</p></div>
+                    <div class="room-actions policy-limits">
+                      <label>Month <input type="month" data-comm-month /></label>
+                      <button class="select" type="button" data-comm-tds-refresh>Refresh</button>
+                      <button class="primary" type="button" data-comm-tds-deposit-all>Mark all deposited</button>
+                    </div>
+                  </div>
+                  <form id="tds-challan-form" class="policy-form">
+                    <div class="policy-limits">
+                      <label>Challan BSR <input name="bsr" inputmode="numeric" maxlength="7" data-comm-tds-bsr placeholder="7 digits" /></label>
+                      <label>Challan serial <input name="serial" inputmode="numeric" maxlength="10" data-comm-tds-serial /></label>
+                      <label>Challan date <input name="on" type="date" data-comm-tds-date /></label>
+                      <label>Challan amount ₹ <input name="amount" type="number" min="0" step="0.01" data-comm-tds-amount /></label>
+                    </div>
+                    <p class="note">The amount has to match the open TDS you mark. One retailer uses that row’s open figure. Mark all uses this amount.</p>
+                  </form>
+                  <div class="table-wrap" data-comm-tds-table><p class="note">No TDS rows for this month.</p></div>
+                </section>
+              </div>
+
+              <div data-econ-view="gst" hidden>
+                <div class="room-head">
+                  <div>
+                    <p class="eyebrow">Economics · GST</p>
+                    <h1>GST</h1>
+                    <p>GST rate on commission first, then monthly draft invoices for GSTIN retailers.</p>
+                  </div>
+                  <div class="room-actions"><button class="select" type="button" data-econ-open="hub">Economics</button></div>
+                </div>
+                <section class="card room-card">
+                  <div class="panel-head"><div><h2>GST policy</h2><p>Rate used on taxable commission for GSTIN retailers.</p></div></div>
+                  <form id="gst-policy-form" class="policy-form">
+                    <div class="policy-limits">
+                      <label>GST % on commission <input name="gst_rate_percent" type="number" min="0" max="100" step="0.01" /></label>
+                    </div>
+                    <div class="policy-commit"><button class="primary" type="submit">Save GST policy</button></div>
+                  </form>
+                </section>
+                <section class="card room-card">
+                  <div class="panel-head">
+                    <div><h2>GST invoices</h2><p>Create or list monthly draft tax invoices for a GSTIN retailer.</p></div>
+                    <div class="room-actions policy-limits">
+                      <label>Month <input type="month" data-comm-month /></label>
+                      <label>Retailer email <input type="email" data-comm-inv-email placeholder="retailer@example.com" /></label>
+                      <button class="select" type="button" data-comm-inv-refresh>List</button>
+                      <button class="primary" type="button" data-comm-inv-create>Create draft</button>
+                    </div>
+                  </div>
+                  <div class="table-wrap" data-comm-inv-table><p class="note">No invoices yet.</p></div>
+                </section>
+              </div>
+            </div>
           </div>
-          <div data-panel="parkpe" hidden>
-            <section class="card">
-              <h2>ParkPe</h2>
-              <p class="note">No stored ParkPe rows on this desk. The mounted write is a parking session start. FASTag, challan, bills, and the other ParkPe screens are not rows yet.</p>
+          <div class="room" data-panel="fund-requests" hidden>
+            <div class="room-head">
+              <div>
+                <p class="eyebrow">Operations · Float Approvals</p>
+                <h1>Retailer fund requests</h1>
+                <p>Inspect every UTR bank/UPI float submission and Cashfree PG wallet load in full detail, verify wallet state, and approve or reject with audit notes.</p>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="select" type="button" id="fund-export-csv">Export CSV</button>
+              </div>
+            </div>
+            <section class="stats" aria-label="Fund requests summary">
+              <article class="card stat">
+                <div class="stat-top"><div class="stat-icon">◷</div><span class="delta" data-fund-pending-badge>0 pending</span></div>
+                <div class="stat-num" data-fund-pending-vol>₹0.00</div>
+                <div class="stat-label">Pending UTR requests</div>
+              </article>
+              <article class="card stat">
+                <div class="stat-top"><div class="stat-icon">✓</div><span class="delta" data-fund-approved-badge>0 approved</span></div>
+                <div class="stat-num" data-fund-approved-vol>₹0.00</div>
+                <div class="stat-label">Approved bank/UPI float</div>
+              </article>
+              <article class="card stat">
+                <div class="stat-top"><div class="stat-icon">✕</div><span class="delta" data-fund-rejected-badge>0 rejected</span></div>
+                <div class="stat-num" data-fund-rejected-vol>₹0.00</div>
+                <div class="stat-label">Rejected requests</div>
+              </article>
+              <article class="card stat">
+                <div class="stat-top"><div class="stat-icon">PG</div><span class="delta" data-fund-pg-badge>0 orders</span></div>
+                <div class="stat-num" data-fund-pg-vol>₹0.00</div>
+                <div class="stat-label">PG wallet top-ups</div>
+              </article>
+            </section>
+            <section class="card log-read" data-fund-detail hidden>
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow" data-fund-detail-id>Request</p>
+                  <h2 data-fund-detail-title>Fund request details</h2>
+                  <p data-fund-detail-sub></p>
+                </div>
+                <div class="log-read-actions">
+                  <span class="pill" data-fund-detail-status>pending</span>
+                  <button class="log-close" type="button" data-fund-detail-close aria-label="Close fund request details">Close</button>
+                </div>
+              </div>
+              <dl class="log-facts" data-fund-detail-facts></dl>
+              <form id="fund-detail-review-form" class="fund-review-bar" hidden>
+                <label>Verification / audit note
+                  <input name="note" maxlength="200" placeholder="Verified in HDFC/ICICI statement or rejection reason..." />
+                </label>
+                <div class="fund-review-actions">
+                  <button class="primary" type="button" data-fund-review-decision="approve">Approve &amp; Credit Wallet</button>
+                  <button class="danger" type="button" data-fund-review-decision="reject">Reject Request</button>
+                </div>
+              </form>
+            </section>
+            <section class="card room-card">
+              <div class="panel-head">
+                <div><h2>All fund requests</h2><p>Select any row to open the full request record, linked wallet balance, and ledger settlement details.</p></div>
+                <span class="directory-count" data-fund-total-count>0 requests</span>
+              </div>
+              <div class="toolbar">
+                <div class="segments" data-fund-tabs role="tablist" aria-label="Filter fund requests">
+                  <button class="is-on" type="button" data-fund-tab="all">All <span data-fund-tab-count="all">(0)</span></button>
+                  <button type="button" data-fund-tab="pending">Pending <span data-fund-tab-count="pending">(0)</span></button>
+                  <button type="button" data-fund-tab="approved">Approved <span data-fund-tab-count="approved">(0)</span></button>
+                  <button type="button" data-fund-tab="rejected">Rejected <span data-fund-tab-count="rejected">(0)</span></button>
+                  <button type="button" data-fund-tab="pg">PG Top-ups <span data-fund-tab-count="pg">(0)</span></button>
+                </div>
+                <select id="fund-mode-filter" class="fund-mode-select" aria-label="Filter by transfer mode">
+                  <option value="all">All modes</option>
+                  <option value="BANK_TRANSFER">Bank Transfer</option>
+                  <option value="UPI">UPI</option>
+                </select>
+                <label class="people-search">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                  <input id="fund-req-search" type="search" list="retailer-email-list" autocomplete="off" placeholder="Search email, UTR, request ID, remarks..." aria-label="Search fund requests" />
+                </label>
+              </div>
+              <div class="table-wrap" data-fund-requests-table><p class="note">Loading fund requests…</p></div>
             </section>
           </div>
-          <div data-panel="payswap" hidden>
-            <section class="card">
-              <h2>PaySwap</h2>
-              <p class="note">No stored PaySwap rows on this desk. The mounted write is a voucher order. AEPS and DMT stay a counter preview and are not submitted from here.</p>
+          <div class="room" data-panel="verification" hidden>
+            <div class="room-head"><div><p class="eyebrow">Account onboarding</p><h1>Account hub · Verification</h1><p>Verification is attached to the same account ID and role shown in the Account hub. Sensitive codes and identity documents stay off this screen.</p></div></div>
+            <nav class="account-tabs" aria-label="Account hub views"><button type="button" data-account-view="people">Directory</button><button class="is-on" type="button" data-account-view="verification">Verification <span data-verify-count>0</span></button></nav>
+            <section class="verify-stats" aria-label="Verification summary">
+              <article class="card verify-stat"><span class="verify-stat-icon">◎</span><div><strong data-verify-stat-total>0</strong><small>Total records</small><p>Open and completed applications</p></div></article>
+              <article class="card verify-stat is-pending"><span class="verify-stat-icon">◷</span><div><strong data-verify-stat-pending>0</strong><small>In progress</small><p>Waiting for the next check</p></div></article>
+              <article class="card verify-stat is-verified"><span class="verify-stat-icon">✓</span><div><strong data-verify-stat-verified>0</strong><small>Verified accounts</small><p>Completed customer or retailer</p></div></article>
+              <article class="card verify-stat is-retailer"><span class="verify-stat-icon">◇</span><div><strong data-verify-stat-retailer>0</strong><small>Retailer checks</small><p>DigiLocker and PAN where needed</p></div></article>
+            </section>
+            <section class="card directory-card verify-directory">
+              <div class="panel-head directory-head">
+                <div><h2>Verification queue</h2><p>Latest 20 pending signups and 40 verified customer or retailer accounts. Resume an open signup or cancel it.</p></div>
+                <span class="directory-count" data-verify-total>0 records</span>
+              </div>
+              <div class="privacy">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <p>Email and SMS codes, PAN, and Aadhaar numbers are never shown. Only check status and safe identifiers appear below.</p>
+              </div>
+              <div class="toolbar verify-toolbar">
+                <div class="segments" data-verify-filters role="tablist" aria-label="Filter verification">
+                  <button class="is-on" type="button" role="tab" aria-selected="true" data-verify-filter="all">All <span data-verify-filter-count>0</span></button>
+                  <button type="button" role="tab" aria-selected="false" data-verify-filter="pending">In progress <span data-verify-filter-count>0</span></button>
+                  <button type="button" role="tab" aria-selected="false" data-verify-filter="verified">Verified <span data-verify-filter-count>0</span></button>
+                </div>
+              </div>
+              <div data-verify-panel="pending" class="verify-section">
+                <div class="verify-section-head"><h3>In progress</h3><p>Resume the next step or resend codes.</p></div>
+                <ul class="rows people verify-rows" data-signups></ul>
+              </div>
+              <div data-verify-panel="verified" class="verify-section">
+                <div class="verify-section-head"><h3>Recent verified accounts</h3><p>Use View profile for full verification details and account activity.</p></div>
+                <ul class="rows people verify-rows" data-verified></ul>
+              </div>
+            </section>
+            <section class="card verify-profile" data-verify-profile hidden>
+              <div class="verify-profile-head">
+                <div class="verify-profile-title">
+                  <span class="avatar" data-verify-profile-avatar aria-hidden="true">—</span>
+                  <div>
+                    <h2 data-verify-profile-email>Account profile</h2>
+                    <p data-verify-profile-meta></p>
+                  </div>
+                </div>
+                <span class="verify-account-id" data-verify-profile-id>Account ID —</span>
+                <button type="button" class="quiet btn-sm" data-verify-profile-close>Close</button>
+              </div>
+              <div class="verify-profile-checks" aria-label="Verification checks" data-verify-profile-checks></div>
+              <div class="verify-profile-sessions">
+                <h3>Open sessions</h3>
+                <ul class="rows" data-verify-profile-sessions></ul>
+              </div>
+              <p class="verify-profile-foot">
+                <button type="button" class="text" data-verify-profile-users>Open full account file in Users</button>
+              </p>
+            </section>
+            <section class="card room-card resume-card" data-signup-resume hidden>
+              <div class="panel-head"><div><h2>Continue signup</h2><p>Details from when this flow started are already stored. Finish the next check only.</p></div><button class="quiet btn-sm" type="button" data-resume-close>Back to queue</button></div>
+              <p class="resume-summary" data-resume-summary></p>
+              <ol class="resume-steps" data-resume-progress aria-label="Signup progress"></ol>
+              <form id="resume-signup" class="resume-form">
+                <div data-resume="codes" hidden>
+                  <label>Email code<input name="email_code" inputmode="numeric" autocomplete="one-time-code" placeholder="Email code" required /></label>
+                  <label>SMS code<input name="sms_code" inputmode="numeric" autocomplete="one-time-code" placeholder="SMS code" required /></label>
+                </div>
+                <div data-resume="aadhaar" hidden>
+                  <p class="note">DigiLocker opens for this retailer. The account is not created yet.</p>
+                </div>
+                <div data-resume="aadhaar-done" hidden>
+                  <p class="note">Open the DigiLocker link for the retailer. After consent, confirm here.</p>
+                  <a class="note link" data-resume-link target="_blank" rel="noopener noreferrer" hidden></a>
+                </div>
+                <div data-resume="pan" hidden>
+                  <label>PAN<input name="pan" autocapitalize="characters" autocomplete="off" placeholder="ABCDE1234F" required /></label>
+                  <label>Name on PAN<input name="pan_name" autocomplete="off" placeholder="Name on the card" required /></label>
+                </div>
+                <p class="error" data-resume-error hidden></p>
+                <button class="primary" type="submit" data-resume-submit>Continue</button>
+                <p class="hint" data-resume-hint></p>
+              </form>
             </section>
           </div>
-          <div data-panel="money" hidden>
-            <section class="card">
-              <h2>Money</h2>
-              <p class="note">No money list yet. A stored /api/v1 write will show the actor, app, action, target, outcome, and status. Nothing is invented to fill this room.</p>
+          <div class="room" data-panel="services" hidden>
+            <div class="room-head"><div><p class="eyebrow">Platform</p><h1>API &amp; services</h1><p>Live status for external providers, the shared Django API, and local stubs. Secrets and keys stay on the server.</p></div><button class="select" type="button" data-jump="logs">Open API logs →</button></div>
+            <section class="service-grid" data-services-grid>
+              <article class="card service-card"><div class="service-icon">⌘</div><div><h2>Loading integrations…</h2><p>Checking provider configuration and recent API calls.</p></div></article>
             </section>
           </div>
-          <div data-panel="verification" hidden>
-            <section class="card">
-              <h2>Verification</h2>
-              <p class="note">Signups this desk started. Mobile is the last four digits. Codes, Aadhaar, and PAN are not listed.</p>
-              <ul class="rows" data-signups></ul>
+          <div class="room" data-panel="reports" hidden>
+            <div class="room-head">
+              <div>
+                <p class="eyebrow">Operations &amp; Analytics</p>
+                <h1>Transaction reports</h1>
+                <p>Complete records across BBPS collections, retailer UTR fund requests, Cashfree PG orders, double-entry wallet ledger, holds, and vouchers.</p>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="select" type="button" id="report-export-csv">Export CSV</button>
+                <button class="select" type="button" data-jump="fund-requests">Fund Requests</button>
+              </div>
+            </div>
+            <section class="ledger-stats" aria-label="Transaction report summary">
+              <article class="card ledger-stat"><span class="ledger-stat-icon">₹</span><div><strong data-rep-bbps-vol>₹0.00</strong><small>BBPS volume</small><p data-rep-bbps-counts>0 txns</p></div></article>
+              <article class="card ledger-stat"><span class="ledger-stat-icon is-ok">PG</span><div><strong data-rep-pg-vol>₹0.00</strong><small>PG orders</small><p data-rep-pg-counts>0 orders</p></div></article>
+              <article class="card ledger-stat"><span class="ledger-stat-icon">≋</span><div><strong data-rep-ledger-count>0</strong><small>Wallet ledger</small><p data-rep-ledger-vol>CR ₹0 · DR ₹0</p></div></article>
+            </section>
+            <section class="card log-read" data-report-detail hidden>
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow" data-report-detail-id>Record</p>
+                  <h2 data-report-detail-title>Transaction record</h2>
+                  <p data-report-detail-sub></p>
+                </div>
+                <div class="log-read-actions">
+                  <button class="select" type="button" data-report-detail-sync hidden>Check live status</button>
+                  <button class="log-close" type="button" data-report-detail-close aria-label="Close record details">Close</button>
+                </div>
+              </div>
+              <dl class="log-facts" data-report-detail-facts></dl>
+            </section>
+            <section class="card room-card">
+              <div class="panel-head">
+                <div><h2>Filter &amp; inspect</h2><p>Filter by retailer email, status, payment rail, or keyword, then inspect any complete record or export CSV.</p></div>
+                <button class="select" type="button" id="report-reset-btn">Reset filters</button>
+              </div>
+              <div class="room-body">
+                <form id="report-filter-form" class="policy-limits">
+                  <label>Retailer email<input name="email" type="search" list="retailer-email-list" placeholder="Filter by retailer email..." /></label>
+                  <label>Search ref / UTR / biller / ID<input name="q" type="search" placeholder="Ref, UTR, vendor ID, account..." /></label>
+                  <label>BBPS status
+                    <select name="state">
+                      <option value="all">All statuses</option>
+                      <option value="success">Success</option>
+                      <option value="pending">Pending</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                  </label>
+                  <label>Payment rail
+                    <select name="channel">
+                      <option value="all">All rails</option>
+                      <option value="wallet">Wallet</option>
+                      <option value="pg">Payment Gateway (PG)</option>
+                    </select>
+                  </label>
+                  <button class="primary" type="submit">Apply filters</button>
+                </form>
+                <div class="segments" data-report-tabs style="flex-wrap:wrap">
+                  <button class="is-on" type="button" data-report-tab="bbps">BBPS Transactions <span data-rep-tab-count="bbps">0</span></button>
+                  <button type="button" data-report-tab="topups">Fund Requests <span data-rep-tab-count="topups">0</span></button>
+                  <button type="button" data-report-tab="pg">PG Orders <span data-rep-tab-count="pg">0</span></button>
+                  <button type="button" data-report-tab="ledger">Wallet Ledger <span data-rep-tab-count="ledger">0</span></button>
+                  <button type="button" data-report-tab="holds">Wallet Holds <span data-rep-tab-count="holds">0</span></button>
+                  <button type="button" data-report-tab="vouchers">Voucher Orders <span data-rep-tab-count="vouchers">0</span></button>
+                </div>
+              </div>
+              <div class="table-wrap" data-report-table><p class="note">Loading transaction reports…</p></div>
+            </section>
+            <section class="report-grid" style="margin-top:16px">
+              <article class="card report-card"><span class="report-icon">◷</span><h2>Audit trail</h2><p>Filter authentication and provider activity without exposing protected values.</p><button class="text" type="button" data-jump="logs">Open audit logs</button></article>
+              <article class="card report-card"><span class="report-icon">✓</span><h2>Onboarding health</h2><p>See pending signup verification work and resume the appropriate workflow.</p><button class="text" type="button" data-jump="verification">Open verification</button></article>
             </section>
           </div>
-          <div data-panel="processes" hidden>
-            <section class="card">
-              <h2>Processes</h2>
+          <div class="room" data-panel="logs" hidden>
+            <div class="room-head"><div><p class="eyebrow">Audit &amp; security</p><h1>Logs</h1><p>Recent authentication, provider, and API activity. Select an entry for its context and redacted details.</p></div><span class="room-status">Recent · redacted</span></div>
+            <div class="log-stack">
+              <section class="card log-read" data-log-read hidden>
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow" data-log-read-id>Log</p>
+                    <h2 data-log-read-title>Log</h2>
+                    <p data-log-read-why></p>
+                  </div>
+                  <div class="log-read-actions">
+                    <button class="select" type="button" data-log-copy>Copy this log</button>
+                    <button class="log-close" type="button" data-log-close aria-label="Close log details">Close</button>
+                  </div>
+                </div>
+                <dl class="log-facts" data-log-facts></dl>
+              </section>
+              <section class="card log-panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>User actions</h2>
+                    <p>Sign-ins, security changes, and signup verification events.</p>
+                  </div>
+                </div>
+                <div class="segments" data-log-filters="actions">
+                  <button type="button" data-log-service="all">All</button>
+                  <button type="button" data-log-service="Auth">Auth</button>
+                  <button type="button" data-log-service="Signup">Signup</button>
+                </div>
+                <div class="log-list" data-log-actions></div>
+                <div class="log-pagination" data-log-pagination="actions" aria-label="Account activity pages"></div>
+              </section>
+              <section class="card log-panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>Provider &amp; API activity</h2>
+                    <p>Delivery and service calls. Sensitive values are redacted before storage.</p>
+                  </div>
+                </div>
+                <div class="segments" data-log-filters="api">
+                  <button type="button" data-log-service="all">All</button>
+                  <button type="button" data-log-service="Kaleyra">Kaleyra</button>
+                  <button type="button" data-log-service="Email">Email</button>
+                  <button type="button" data-log-service="Cashfree">Cashfree</button>
+                  <button type="button" data-log-service="ParkPe">ParkPe</button>
+                  <button type="button" data-log-service="PaySwap">PaySwap</button>
+                  <button type="button" data-log-service="BBPS">BBPS</button>
+                  <button type="button" data-log-service="Parking">Parking</button>
+                  <button type="button" data-log-service="Idempotency">Idempotency</button>
+                </div>
+                <div class="log-list" data-log-api></div>
+                <div class="log-pagination" data-log-pagination="api" aria-label="Provider and API activity pages"></div>
+              </section>
+            </div>
+          </div>
+          <div class="room" data-panel="processes" hidden>
+            <div class="room-head"><div><p class="eyebrow">Platform</p><h1>System health</h1><p>Processes are checked live for the console, both products, and the shared API.</p></div><span class="room-status">Live checks</span></div>
+            <section class="card room-card">
+              <div class="panel-head"><div><h2>Process status</h2><p>Open a service directly when it is available.</p></div></div>
               <ul class="rows" data-processes></ul>
             </section>
           </div>
         </main>
       </div>
     </div>
-    <script src="/qr.js?v=8"></script>
-    <script src="/console.js?v=8"></script>
+
+    <div class="modal" id="confirm" hidden>
+      <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
+        <h2 id="confirm-title">Confirm</h2>
+        <p data-confirm-body></p>
+        <div class="modal-actions">
+          <button class="quiet" type="button" data-confirm-cancel>Cancel</button>
+          <button class="primary" type="button" data-confirm-ok>Confirm</button>
+        </div>
+      </div>
+    </div>
+    <form class="modal" id="password-modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="password-title">
+        <h2 id="password-title">New password</h2>
+        <p class="note" data-password-for></p>
+        <label>Password
+          <span class="field">
+            <input name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required placeholder="12 or more characters" />
+            <button class="reveal" type="button" data-reveal aria-label="Show password">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>
+            </button>
+          </span>
+        </label>
+        <p class="hint">Use 12 to 128 characters. Keep the email out of the password.</p>
+        <p class="error" data-password-error hidden></p>
+        <div class="modal-actions">
+          <button class="quiet" type="button" data-password-cancel>Cancel</button>
+          <button class="primary" type="submit">Update password</button>
+        </div>
+      </div>
+    </form>
+    <script src="/qr.js?v=10"></script>
+    <div class="toast" id="toast" role="status"></div>
+    <script src="/console.js?v=68"></script>
   </body>
 </html>

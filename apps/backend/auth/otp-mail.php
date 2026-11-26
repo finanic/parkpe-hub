@@ -17,7 +17,12 @@ if (!is_array($message)) {
 $to = trim((string) ($message['to'] ?? ''));
 $subject = trim((string) ($message['subject'] ?? ''));
 $text = (string) ($message['text'] ?? '');
-if ($to === '' || $subject === '' || $text === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
+$preview = ($message['template_preview'] ?? false) === true;
+$role = (string) ($message['role'] ?? 'customer');
+if ($to === '' || $subject === '' || (!$preview && $text === '') || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
+    exit(1);
+}
+if (!in_array($role, ['customer', 'retailer'], true)) {
     exit(1);
 }
 
@@ -39,8 +44,31 @@ if ($host === '' || $username === '' || $password === '') {
 require_once $smtpPath;
 
 $from = (string) ($config['from_email'] ?? 'noreply@parkpe.in');
-$name = (string) ($config['site_name'] ?? 'ParkPe');
-$html = '<p>' . htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>';
+$isPayswap = $role === 'retailer';
+$brand = $isPayswap ? 'PaySwap' : 'ParkPe';
+$name = $brand;
+$logoPath = dirname(__DIR__, 2) . ($isPayswap
+    ? '/payswap/assets/payswap-logo.png'
+    : '/parkpe/assets/img/logo/parkpe_logo.png');
+$logo = is_file($logoPath) ? 'data:image/png;base64,' . base64_encode((string) file_get_contents($logoPath)) : '';
+$safeSubject = htmlspecialchars($subject, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$safeBrand = htmlspecialchars($brand, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$otp = '';
+if (!$preview && preg_match('/\b([0-9]{6})\b/', $text, $match) === 1) {
+    $otp = $match[1];
+}
+$content = $preview
+    ? '<p style="margin:0;color:#475569;font-size:16px;line-height:1.7">This ' . $safeBrand . ' email design preview contains no sign-in code.</p>'
+    : ($otp !== ''
+        ? '<p style="margin:0 0 20px;color:#475569;font-size:16px;line-height:1.7">Use this one-time code to continue:</p><div style="margin:0 auto 20px;padding:18px 24px;border:1px solid #dbece2;border-radius:14px;background:#f3faf5;color:#123b2b;font-size:34px;font-weight:700;letter-spacing:10px;text-align:center">' . htmlspecialchars($otp, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</div><p style="margin:0;color:#64748b;font-size:14px;line-height:1.7">This code expires in 10 minutes. For your security, do not share it with anyone.</p>'
+        : '<p style="margin:0;color:#475569;font-size:16px;line-height:1.7">' . nl2br(htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</p>');
+$brandMark = $logo !== ''
+    ? '<img src="' . $logo . '" width="150" alt="' . $safeBrand . '" style="display:block;width:auto;max-width:170px;height:auto;max-height:72px;margin:0 auto">'
+    : '<span style="color:#17623d;font-size:22px;font-weight:700">' . $safeBrand . '</span>';
+$html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>' . $safeSubject . '</title></head><body style="margin:0;padding:32px 12px;background:#f1f5f2;font-family:Arial,Helvetica,sans-serif;color:#173326"><div style="display:none;max-height:0;overflow:hidden;opacity:0">' . ($preview ? 'A preview of the ' . $safeBrand . ' verification email.' : 'Your ' . $safeBrand . ' verification code is inside.') . '</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;margin:0 auto"><tr><td style="padding:0 0 22px;text-align:center">' . $brandMark . '</td></tr><tr><td style="padding:34px 32px 30px;border:1px solid #e1e9e3;border-radius:20px;background:#ffffff;box-shadow:0 12px 36px rgba(21,61,41,.08)"><p style="margin:0 0 10px;color:#21804d;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase">Account security</p><h1 style="margin:0 0 18px;color:#123b2b;font-size:26px;line-height:1.25">' . ($preview ? 'A clearer, safer email' : 'Verify your email') . '</h1>' . $content . '<div style="height:1px;margin:26px 0 18px;background:#e8eee9"></div><p style="margin:0;color:#718078;font-size:13px;line-height:1.6">If you did not request this, you can safely ignore this email. We will never ask you to share your code.</p></td></tr><tr><td style="padding:18px 20px;text-align:center;color:#7b8981;font-size:12px;line-height:1.6">Payswap Fintech Private Limited<br>Automated message — please do not reply.</td></tr></table></body></html>';
+$plainText = $preview
+    ? $brand . ' email design preview. This test message contains no sign-in code.'
+    : $text;
 $sent = sesSmtpSendMessage(
     [
         'host' => $host,
@@ -52,7 +80,7 @@ $sent = sesSmtpSendMessage(
     $name,
     [$to],
     $subject,
-    $text,
+    $plainText,
     $html
 );
 

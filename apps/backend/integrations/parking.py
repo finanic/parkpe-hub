@@ -10,6 +10,7 @@ The bay and amount stay out of that line.
 from __future__ import annotations
 
 import hashlib
+import json
 import time
 from decimal import Decimal
 
@@ -26,5 +27,7 @@ def reserve_parking_bay(*, bay: str, amount: Decimal) -> str:
         status=200,
         duration_ms=elapsed_ms(started),
         target_id=reference,
+        request=json.dumps({"operation": "reserve_parking_bay"}),
+        response=json.dumps({"reference": reference}),
     )
     return reference

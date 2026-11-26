@@ -8,6 +8,8 @@ needs the reflected origin. A foreign Origin is not copied onto the response.
 A POST, PUT, or PATCH under /api/v1 from a foreign Origin is refused here,
 before api/v1/deps.py. A form on another port of 127.0.0.1 can still carry
 the auth_access cookie (SameSite=Lax, path /) and cannot set X-App-Context.
+Desk paths also refuse any Origin. The auth process on 4600 calls them
+with no Origin and only the access cookie. ParkPe and PaySwap must not.
 deps.py still requires that header, so an allowlisted page that omits it
 never reaches domain/parkpe or domain/payswap. packages/sdk-client also
 sends X-Request-Id. config/request.py keeps that value for core/actions.py
@@ -34,6 +36,11 @@ class FrontendOriginMiddleware:
 
     def __call__(self, request):
         origin = _clean(request.headers.get("Origin", ""))
+        if request.path.startswith("/api/v1/desk/") and origin:
+            return JsonResponse(
+                {"error": "Request blocked.", "code": "forbidden_app"},
+                status=403,
+            )
         if request.method == "OPTIONS":
             if origin and origin not in FRONTEND_ORIGINS:
                 return JsonResponse(

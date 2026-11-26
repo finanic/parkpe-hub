@@ -8,7 +8,7 @@ One shared backend, two frontends. Each product has one folder under `apps/`. Sh
 | --- | --- |
 | `apps/parkpe/` | ParkPe. `apps/parkpe/serve.py` on port 4310 (`make parkpe`). Screens in `js/`, `css/`, `dashboard/`. Feature modules in `core/`, `shared/`, `features/` (parking, fastag, carpool, qr-connect). |
 | `apps/payswap/` | PaySwap. `apps/payswap/serve.py` on port 4500 (`make payswap`). Counter in `js/`, `css/`. Feature modules in `core/`, `shared/`, `features/` (cards, vouchers, bbps, transactions). |
-| `apps/backend/` | Shared API. `apps/backend/run.py` is the auth server on port 4600 (`make hub`). Django `/api/v1/` is `manage.py` on port 4610 and calls `GET /api/auth/me` on 4600. |
+| `apps/backend/` | Shared API. `apps/backend/run.py` is the auth server on port 4600 (`make hub`). Django `/api/v1/` is `manage.py` on port 4610 (`make api`) and calls `GET /api/auth/me` on 4600. |
 | `apps/backend/auth/` | Auth contract, HTTP, password primitives, SQLite store, admin console. |
 | `apps/backend/tests/test_auth.py` | Auth behavior tests. |
 | `dev.py`, `Makefile` | Start and document the three processes. No product logic. |
@@ -104,6 +104,7 @@ After an edit, re-read the callers named in the relationship comment.
 - Auth, contract, store, security, or `apps/payswap/js/session.js`: run `python3 apps/backend/tests/test_auth.py` from the repo root.
 - A ParkPe screen: `make parkpe` and use the changed screen at `http://127.0.0.1:4310/`.
 - A PaySwap screen: `make payswap` and use the changed screen at `http://127.0.0.1:4500/`.
-- The console or API: `make hub` and use `http://127.0.0.1:4600/`.
+- The console: `make hub` and use `http://127.0.0.1:4600/`. Django `/api/v1/`: `make api` at `http://127.0.0.1:4610/`.
+- BBPS commission rates auto-load from `apps/backend/data/mobikwik/commission-b2b.xlsx` on API start. Monthly GST drafts: `python3 apps/backend/manage.py generate_commission_invoices` (cron on the 1st).
 
 Say what you ran and what you did not run. Do not report a check that was skipped.

@@ -1,0 +1,71 @@
+---
+description: Required UI and UX quality gate for ParkPe, PaySwap, and the backend console.
+alwaysApply: true
+---
+
+# Global UI and UX standard
+
+Before changing a screen, component, CSS, navigation flow, or integration surface, read `AGENTS.md` and this rule. Inspect the closest existing screen and its stylesheet before writing code. Extend that product's established interface; do not invent a parallel design system.
+
+## Product boundaries and visual identity
+
+- ParkPe stays in `apps/parkpe/` and follows the palette, shell, dashboard patterns, and components in `apps/parkpe/css/dashboard.css`.
+- PaySwap stays in `apps/payswap/` and follows the navy, blue, cyan, and restrained yellow system in `apps/payswap/css/app.css`.
+- The admin console stays in `apps/backend/auth/console/` and follows its calm white, blue, and neutral system in `console.css`.
+- Do not copy screens, CSS, assets, or product language between apps. Shared contracts belong in `packages/`, not a visual system.
+
+## Build every screen as part of one product
+
+- Reuse the existing shell, sidebar, header, card, control, table, empty-state, status, and feedback patterns before creating a new one.
+- Use existing design tokens and component classes. Do not add inline styles, raw emoji/icon characters, random gradients, or a second set of near-duplicate utility classes.
+- A page needs a clear title, one-sentence purpose, an obvious primary action, useful secondary actions, and predictable back/navigation behaviour.
+- Show account IDs wherever an account is selected, reviewed, transacted against, or referenced. Retailer IDs begin `R00`; customer IDs begin `CU00`.
+- Keep related account, verification, and transaction information linked through the same account identity. Never present disconnected duplicate records.
+
+## Required screen composition
+
+Build operational pages with this order unless the task genuinely needs a different flow:
+
+1. **Product shell:** persistent sidebar, top bar, search/utility actions, and the current workspace breadcrumb. The current navigation item is the only strongly highlighted item.
+2. **Page introduction:** a small uppercase context label, one clear page title, and one short sentence explaining the operational job. Keep primary page actions on the same visual row as the introduction, aligned to the right on wide screens.
+3. **At-a-glance summary:** use a small, equal-height row of compact stat cards when there are meaningful totals. Each card has one quiet icon, one primary number, a concise label, and an optional short status. Do not add a stat card for decorative or invented data.
+4. **Work surface:** place filters, tabs, search, and the primary data table or form inside one large white rounded card. Its heading explains the task; its toolbar groups controls in a predictable order: scope tabs, filters, then search/primary action.
+5. **Record actions:** place row-level actions at the far edge of a table. Use one primary action and quiet secondary actions; do not scatter controls through unrelated columns.
+
+## Reference visual language
+
+Use the supplied admin-reference style as the quality bar, adapted to each product's palette:
+
+- Start with a very light neutral/blue canvas and use white surfaces with fine low-contrast borders. Cards should feel separated by spacing and borders, not heavy shadows or gradients.
+- Use 12–16px rounded corners, a restrained 12–16px spacing rhythm inside controls, and 16–24px gaps between major sections. Whitespace must make groups easier to scan, never leave unexplained empty slabs.
+- Use dark navy/ink for titles and key numbers, muted slate for supporting copy, and one product accent for selection, primary buttons, links, and active states. Success, warning, and error colors are reserved for meaningful status.
+- Titles and money values carry visual weight; labels, helper text, IDs, dates, and audit details stay deliberately quieter. Use sentence case for headings and uppercase only for small section labels or table headers.
+- Tables need a subtle header band, readable row height, aligned numeric columns, compact status pills, and a quiet hover state. Show the identifier and date together, then the human-readable entity, then operational facts. Long IDs must use monospace and wrap or truncate safely.
+- Inputs are equal-height, visibly labelled, and grouped by decision. Search belongs at the end of a toolbar; reset/export/secondary actions stay visually quiet; the one commit action is clearly primary.
+- Tabs and segmented filters are compact pills with one selected state. Do not turn every navigation choice into a filled blue button.
+
+## Admin dashboard specifics
+
+- The admin shell must remain calm and information-first: sidebar navigation, a simple header, breadcrumb, title, and utility controls. Do not use retail landing-page visuals, oversized hero art, or promotional copy in the console.
+- Accounts, fund requests, transactions, verification, services, and finance pages must use the same page-introduction → summary → work-surface pattern so an operator always knows where to look.
+- Finance and settlement pages must explain the decision before the editable controls, place policy before the rate catalogue, and place reports/history after operational controls.
+- A data table must have a useful empty state, loading state, filtered-zero state, and error/retry state. Do not hide a failed integration behind a blank table.
+- On narrow screens, stack the introduction actions, stat cards, and filters; preserve the primary action; make wide tables horizontally contained inside their card rather than forcing horizontal page scrolling.
+
+## Layout and interaction quality
+
+- Use a deliberate spacing scale already present in the product. Cards, forms, tables, and grouped actions must align; avoid both large dead areas and cramped controls.
+- Treat a data-heavy sheet as a focused work surface, not a raw spreadsheet. Show the record identity first, group related values into readable cells, keep row-level actions next to the row, and use clear filter/action bars above the table. Do not expose a wide table full of isolated micro-fields when a grouped edit row is clearer.
+- For settings or finance screens, build a clear hierarchy: a purpose-led header, a focused policy/control area with plain-language guidance, the operational catalogue or data table, then reporting or history. Give every section a distinct purpose and avoid stacking visually identical cards with no hierarchy.
+- Design desktop and narrow screens together. Grids must collapse safely, tables need a readable compact treatment, and no important control may be clipped or require horizontal page scrolling.
+- Every interactive element needs hover, keyboard focus, disabled, loading, empty, success, and error states where applicable. Preserve accessible labels, semantic buttons, and visible focus.
+- Prefer concise real-world copy. Do not show placeholder claims, fake metrics, or actions that cannot be completed by the connected system.
+- A new integration needs its connection state, retry/recovery path, and safe empty/error state designed in the same view.
+
+## Change discipline
+
+- Keep a UI change scoped to the requested product and route. Do not restyle unrelated working screens.
+- First remove obsolete or duplicate styles for the surface being changed; then add the smallest maintainable extension. Do not append conflicting overrides to hide a layout problem.
+- Check the screen at desktop and mobile widths after the change. Verify navigation, data states, focus, and the primary task path.
+- Bump local asset cache versions when a static HTML entry point references a changed CSS or JavaScript file.
+- Before handoff, run the relevant checks named in `AGENTS.md` and state exactly what was run and what was not.

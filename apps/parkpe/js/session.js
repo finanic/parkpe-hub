@@ -54,6 +54,24 @@ window.ParkpeSession = {
   enableAuthenticator(code) {
     return call("/api/auth/mfa/confirm", { code });
   },
+  profile() {
+    return call("/api/auth/profile");
+  },
+  updateProfile(body) {
+    return call("/api/auth/profile", body);
+  },
+  changePassword(currentPassword, newPassword) {
+    return call("/api/auth/password/change", {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+  },
+  sessions() {
+    return call("/api/auth/sessions");
+  },
+  revokeSession(sessionId) {
+    return call("/api/auth/sessions/revoke", { session_id: sessionId });
+  },
   signOut() {
     return call("/api/auth/logout", {});
   },

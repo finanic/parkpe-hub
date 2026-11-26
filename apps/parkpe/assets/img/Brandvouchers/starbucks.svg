@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="24" fill="#00704A"/>
+  <!-- Siren circle -->
+  <circle cx="60" cy="60" r="26" fill="none" stroke="#CBA258" stroke-width="3"/>
+  <circle cx="60" cy="60" r="20" fill="#1E3932"/>
+  <!-- Crown / star points -->
+  <path d="M60 44 L62 52 L70 52 L64 57 L67 65 L60 60 L53 65 L56 57 L50 52 L58 52 Z" fill="#CBA258"/>
+  <text x="60" y="82" font-family="Arial,sans-serif" font-size="6" font-weight="700" fill="#CBA258" text-anchor="middle">STARBUCKS</text>
+</svg>

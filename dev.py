@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Start the shared auth API and both frontends. Ctrl+C stops all three.
+"""Start auth, the Django API, and both frontends. Ctrl+C stops all four.
 
-  ParkPe   apps/parkpe/serve.py   http://127.0.0.1:4310
-  PaySwap  apps/payswap/serve.py    http://127.0.0.1:4500
-  Auth     apps/backend/run.py      http://127.0.0.1:4600
+  ParkPe   apps/parkpe/serve.py              http://127.0.0.1:4310
+  PaySwap  apps/payswap/serve.py             http://127.0.0.1:4500
+  Auth     apps/backend/run.py               http://127.0.0.1:4600
+  API      apps/backend/manage.py runserver  http://127.0.0.1:4610
 
 Auth allowlists both frontend origins (apps/backend/auth/server.py AUTH_ORIGINS).
 """
@@ -19,9 +20,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 
 SERVICES = (
-    ("auth", ROOT / "apps" / "backend" / "run.py", ROOT / "apps" / "backend"),
-    ("parkpe", ROOT / "apps" / "parkpe" / "serve.py", ROOT / "apps" / "parkpe"),
-    ("payswap", ROOT / "apps" / "payswap" / "serve.py", ROOT / "apps" / "payswap"),
+    ("auth", [sys.executable, str(ROOT / "apps" / "backend" / "run.py")], ROOT / "apps" / "backend"),
+    (
+        "api",
+        [sys.executable, str(ROOT / "apps" / "backend" / "manage.py"), "runserver", "--noreload", "127.0.0.1:4610"],
+        ROOT,
+    ),
+    ("parkpe", [sys.executable, str(ROOT / "apps" / "parkpe" / "serve.py")], ROOT / "apps" / "parkpe"),
+    ("payswap", [sys.executable, str(ROOT / "apps" / "payswap" / "serve.py")], ROOT / "apps" / "payswap"),
 )
 
 
@@ -41,13 +47,14 @@ def main() -> int:
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
 
-    for name, script, cwd in SERVICES:
-        children.append((name, subprocess.Popen([sys.executable, str(script)], cwd=cwd)))
+    for name, command, cwd in SERVICES:
+        children.append((name, subprocess.Popen(command, cwd=cwd)))
 
     print("ParkPe   http://127.0.0.1:4310/", flush=True)
     print("PaySwap  http://127.0.0.1:4500/", flush=True)
     print("Auth     http://127.0.0.1:4600/", flush=True)
-    print("Ctrl+C stops all three.", flush=True)
+    print("API      http://127.0.0.1:4610/", flush=True)
+    print("Ctrl+C stops all four.", flush=True)
 
     exit_code = 0
     while not stopping:

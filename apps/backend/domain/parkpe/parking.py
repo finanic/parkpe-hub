@@ -8,6 +8,7 @@ Downstream: integrations/parking.py. Does not import domain/payswap.
 
 from __future__ import annotations
 
+import json
 import time
 from decimal import Decimal
 
@@ -24,6 +25,8 @@ def hold_bay(*, bay: str, amount: Decimal) -> dict:
         status=200,
         duration_ms=elapsed_ms(started),
         target_id=reference,
+        request=json.dumps({"action": "hold_bay"}),
+        response=json.dumps({"reference": reference, "state": "held"}),
     )
     return {
         "bay": bay,

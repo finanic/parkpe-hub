@@ -2,8 +2,8 @@
 
 Callers: api/v1/routes/parkpe.py (sessions/initiate) and
 api/v1/routes/payswap.py (vouchers/order). The key is the Idempotency-Key
-header. packages/sdk-client is the place that header is meant to be set;
-the running payswap page does not send it yet.
+header. packages/sdk-client sends it. apps/payswap/js/app.js and
+apps/parkpe/js/screens.js keep one key until that attempt finishes.
 
 Scope is (app_context, user_id, endpoint, idempotency_key). The payload
 hash is the canonical JSON body only. The same key and same body return
@@ -88,18 +88,23 @@ def _locked(app_context, user_id, endpoint, key, body_hash, produce):
                     duration_ms=0,
                     error_code="idempotency_conflict",
                     error_reason="This key was already used for a different request.",
+                    request=json.dumps({"endpoint": endpoint, "key": key, "payload_hash": body_hash[:12]}),
+                    response='HTTP 409\n{"outcome":"conflict","error":"This key was already used for a different request."}',
                 )
                 raise IdempotencyProblem(
                     "This key was already used for a different request.",
                     "idempotency_conflict",
                     409,
                 )
+            ref = _reference(existing.body)
             log_action(
                 action="idempotency.reserve",
                 outcome="replay",
                 status=existing.status_code,
                 duration_ms=0,
-                target_id=_reference(existing.body),
+                target_id=ref,
+                request=json.dumps({"endpoint": endpoint, "key": key, "payload_hash": body_hash[:12]}),
+                response=f"HTTP {existing.status_code}\n{json.dumps({'outcome': 'replay', 'reference': ref})}",
             )
             return existing.status_code, existing.body
         started = time.perf_counter()
@@ -114,18 +119,121 @@ def _locked(app_context, user_id, endpoint, key, body_hash, produce):
             body={},
         )
         status, body = produce()
+        ref = _reference(body)
         log_action(
             action="idempotency.reserve",
             outcome="created",
             status=status,
             duration_ms=elapsed_ms(started),
-            target_id=_reference(body),
+            target_id=ref,
+            request=json.dumps({"endpoint": endpoint, "key": key, "payload_hash": body_hash[:12]}),
+            response=f"HTTP {status}\n{json.dumps({'outcome': 'created', 'reference': ref})}",
         )
         record.state = "done"
         record.status_code = status
         record.body = body
         record.save(update_fields=["state", "status_code", "body"])
         return status, body
+
+
+def run_once_external(*, app_context: str, user_id: str, endpoint: str, key: str, body_hash: str, produce):
+    """Idempotency guard that releases the DB lock before external HTTP calls."""
+    from models.models import IdempotencyRecord
+
+    cleaned = (key or "").strip()
+    if not cleaned or len(cleaned) > 200 or any(char.isspace() for char in cleaned):
+        raise IdempotencyProblem("Send an Idempotency-Key.", "validation", 400)
+
+    started = time.perf_counter()
+    record_id = None
+    for _ in range(40):
+        try:
+            with transaction.atomic():
+                existing = (
+                    IdempotencyRecord.objects.select_for_update()
+                    .filter(
+                        app_context=app_context,
+                        user_id=user_id,
+                        endpoint=endpoint,
+                        idempotency_key=cleaned,
+                    )
+                    .first()
+                )
+                if existing is not None:
+                    if existing.payload_hash != body_hash:
+                        log_action(
+                            action="idempotency.reserve",
+                            outcome="conflict",
+                            status=409,
+                            duration_ms=0,
+                            error_code="idempotency_conflict",
+                            error_reason="This key was already used for a different request.",
+                            request=json.dumps({"endpoint": endpoint, "key": cleaned, "payload_hash": body_hash[:12]}),
+                            response='HTTP 409\n{"outcome":"conflict"}',
+                        )
+                        raise IdempotencyProblem(
+                            "This key was already used for a different request.",
+                            "idempotency_conflict",
+                            409,
+                        )
+                    if existing.state == "pending":
+                        raise IdempotencyProblem(
+                            "This payment request is already in progress.",
+                            "idempotency_conflict",
+                            409,
+                        )
+                    ref = _reference(existing.body)
+                    log_action(
+                        action="idempotency.reserve",
+                        outcome="replay",
+                        status=existing.status_code,
+                        duration_ms=0,
+                        target_id=ref,
+                        request=json.dumps({"endpoint": endpoint, "key": cleaned, "payload_hash": body_hash[:12]}),
+                        response=f"HTTP {existing.status_code}\n{json.dumps({'outcome': 'replay', 'reference': ref})}",
+                    )
+                    return existing.status_code, existing.body
+
+                record = IdempotencyRecord.objects.create(
+                    app_context=app_context,
+                    user_id=user_id,
+                    endpoint=endpoint,
+                    idempotency_key=cleaned,
+                    payload_hash=body_hash,
+                    state="pending",
+                    status_code=0,
+                    body={},
+                )
+                record_id = record.pk
+                break
+        except IntegrityError:
+            continue
+        except OperationalError as exc:
+            if "locked" not in str(exc).lower():
+                raise
+            time.sleep(0.01)
+
+    if record_id is None:
+        raise IdempotencyProblem("Could not reserve idempotency key; try again.", "server_error", 503)
+
+    try:
+        status, body = produce()
+    except Exception:
+        IdempotencyRecord.objects.filter(pk=record_id, state="pending").delete()
+        raise
+
+    ref = _reference(body)
+    log_action(
+        action="idempotency.reserve",
+        outcome="created",
+        status=status,
+        duration_ms=elapsed_ms(started),
+        target_id=ref,
+        request=json.dumps({"endpoint": endpoint, "key": cleaned, "payload_hash": body_hash[:12]}),
+        response=f"HTTP {status}\n{json.dumps({'outcome': 'created', 'reference': ref})}",
+    )
+    IdempotencyRecord.objects.filter(pk=record_id).update(state="done", status_code=status, body=body)
+    return status, body
 
 
 def _reference(body) -> str:

@@ -3045,8 +3045,13 @@ button.notify-item {
 .svc-tx-stats strong { display: block; margin-top: 0.7rem; font-size: 1.25rem; }
 .svc-tx-stats small { color: #64748b; font-weight: 700; }
 .svc-tx-table { padding: 0; overflow: hidden; }
+.svc-tx-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.svc-tx-controls .svc-search-lg { flex: 1 1 240px; }
 .svc-txn { padding: 0.85rem 1rem; border-top: 1px solid #eef2e4; }
 .svc-txn-head { display: none; border-top: 0; background: #f7f9e8; color: #526700; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
+.svc-txn-empty { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 1.2rem 1rem; color: #536070; font-weight: 600; }
+.svc-pill.is-active { background: #fff6e8; border-color: #f3d08a; color: #9a6716; }
+.svc-pill.is-closed { background: #eaf8f2; border-color: #b7e6d1; color: #13845e; }
 .svc-connect-head, .svc-support-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.8rem; }
 .svc-connect-head a, .svc-connect-head button { display: inline-flex; min-height: 2.5rem; align-items: center; gap: 0.3rem; border: 0; border-radius: 0.8rem; background: #111; color: #fff; padding: 0 0.9rem; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
 .svc-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.25rem; border: 1px solid #e7efb0; border-radius: 1rem; background: rgba(243, 247, 207, 0.45); padding: 0.25rem; }

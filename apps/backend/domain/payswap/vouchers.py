@@ -10,7 +10,8 @@ The service line is core/actions.py action domain.payswap.voucher.order.
 
 from __future__ import annotations
 
-import hashlib
+import json
+import secrets
 import time
 from decimal import Decimal
 
@@ -21,14 +22,15 @@ from domain.common.scope import PAYSWAP
 
 def order_voucher(*, user_id: str, brand: str, amount: Decimal) -> dict:
     started = time.perf_counter()
-    digest = hashlib.sha256(f"{user_id}|{brand}|{amount:.2f}".encode()).hexdigest()[:12]
-    reference = f"vch-{digest}"
+    reference = f"vch-{secrets.token_hex(8)}"
     log_action(
         action="domain.payswap.voucher.order",
         outcome="ok",
         status=201,
         duration_ms=elapsed_ms(started),
         target_id=reference,
+        request=json.dumps({"brand": brand, "amount": f"{amount:.2f}"}),
+        response=json.dumps({"reference": reference, "brand": brand, "amount": f"{amount:.2f}", "state": "ordered"}),
     )
     return {
         "brand": brand,

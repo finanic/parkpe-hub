@@ -4,3 +4,6 @@ __pycache__/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+.env
+*.pem
+*.key

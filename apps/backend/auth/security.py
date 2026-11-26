@@ -133,15 +133,21 @@ def totp_code(secret_b32: str, when: float | None = None) -> str:
     return _hotp(_totp_secret(secret_b32), int(moment) // 30)
 
 
-def totp_matches(secret_b32: str, code: str, when: float | None = None) -> bool:
+def totp_step(secret_b32: str, code: str, when: float | None = None) -> int | None:
+    """Return the 30-second counter that matched, including one step of skew."""
     if not isinstance(code, str) or not code.isdigit() or len(code) != 6:
-        return False
+        return None
     moment = time.time() if when is None else when
     secret = _totp_secret(secret_b32)
     for skew in (-30, 0, 30):
-        if hmac.compare_digest(_hotp(secret, int(moment + skew) // 30), code):
-            return True
-    return False
+        step = int(moment + skew) // 30
+        if hmac.compare_digest(_hotp(secret, step), code):
+            return step
+    return None
+
+
+def totp_matches(secret_b32: str, code: str, when: float | None = None) -> bool:
+    return totp_step(secret_b32, code, when) is not None
 
 
 def new_backup_codes() -> list[str]:

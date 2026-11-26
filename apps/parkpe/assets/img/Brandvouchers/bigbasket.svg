@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="24" fill="#84C225"/>
+  <text x="60" y="48" font-family="Arial,sans-serif" font-size="8" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">bigbasket</text>
+  <!-- Basket icon -->
+  <path d="M36 68 L40 82 L80 82 L84 68 Z" fill="#fff" opacity="0.9"/>
+  <path d="M44 68 Q44 60 60 60 Q76 60 76 68" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="36" y1="68" x2="84" y2="68" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+  <!-- Leaf -->
+  <path d="M60 62 Q62 56 68 56 Q65 62 60 62Z" fill="#4CAF50"/>
+  <line x1="60" y1="62" x2="65" y2="57" stroke="#2E7D32" stroke-width="1.2"/>
+</svg>
