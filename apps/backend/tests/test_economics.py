@@ -133,6 +133,7 @@ class EconomicsServiceChargeTests(TestCase):
             amount_paise=50_000,
             admin_email="ops@hub.test",
             reason="seed float for fee test",
+            idempotency_key="econ-seed-float",
         )
 
     def test_fee_mode_and_fee_dr_ledger(self):

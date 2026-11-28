@@ -41,6 +41,9 @@ export function createClient(appContext, idempotencyKey) {
     request(path, options = {}) {
       return send(appContext, idempotencyKey, path, options);
     },
+    download(path, options = {}) {
+      return downloadFile(appContext, path, options);
+    },
   });
 }
 
@@ -58,9 +61,14 @@ async function send(appContext, defaultKey, path, options) {
     if (!key || String(key).trim() !== String(key) || /\s/.test(String(key))) {
       return failure(400, "Send an Idempotency-Key.", ErrorCode.VALIDATION, requestId);
     }
-    headers["Content-Type"] = "application/json";
     headers[IDEMPOTENCY_HEADER] = String(key);
-    init.body = JSON.stringify(options.body ?? {});
+    if (options.formData instanceof FormData) {
+      // Browser sets multipart boundary; do not force application/json.
+      init.body = options.formData;
+    } else {
+      headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(options.body ?? {});
+    }
   }
   const doFetch = options.fetch || globalThis.fetch;
   let response;
@@ -94,6 +102,52 @@ function availableRequestId(given) {
   return "";
 }
 
+/* File GETs (CSV template/export) need X-App-Context + cookies; window.open cannot set the header. */
+async function downloadFile(appContext, path, options = {}) {
+  const requestId = availableRequestId(options.requestId);
+  const headers = {
+    Accept: options.accept || "*/*",
+    [APP_CONTEXT_HEADER]: appContext,
+  };
+  if (requestId) headers[REQUEST_ID_HEADER] = requestId;
+  const doFetch = options.fetch || globalThis.fetch;
+  let response;
+  try {
+    response = await doFetch(HUB_ORIGIN + path, { method: "GET", headers, credentials: "include" });
+  } catch {
+    return failure(0, "The hub API is not reachable.", ErrorCode.SERVER_ERROR, requestId);
+  }
+  if (!response.ok) {
+    let payload = {};
+    try {
+      const parsed = await response.json();
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) payload = parsed;
+    } catch {
+      payload = {};
+    }
+    const error = typeof payload.error === "string" && payload.error ? payload.error : "Download failed.";
+    const code = typeof payload.code === "string" && payload.code ? payload.code : codeForStatus(response.status);
+    return { ok: false, status: response.status, data: payload, error, code, requestId, blob: null, filename: "" };
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+  const filename = (match && decodeURIComponent(match[1].replace(/"/g, ""))) || options.filename || "download.bin";
+  return { ok: true, status: response.status, data: {}, error: "", code: "", requestId, blob, filename };
+}
+
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename || "download.bin";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function failure(status, error, code, requestId = "") {
   return { ok: false, status, data: {}, error, code, requestId };
 }
@@ -106,4 +160,4 @@ function codeForStatus(status) {
   return ErrorCode.VALIDATION;
 }
 
-export { HubPath };
+export { HubPath, saveBlob };

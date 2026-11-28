@@ -4,8 +4,8 @@ Callers: api/v1/routes/support.py (the HTTP result), domain/parkpe and
 domain/payswap, integrations/parking.py, integrations/bbps.py,
 integrations/kaleyra.py (the SMS provider call), and core/idempotency.py.
 The auth process registers set_action_sink so those lines also land in
-auth/store.py service_log. The Logs screen on the console reads that table.
-Django /api/v1 lines still go to HubAction.
+auth/store.py service_log. The Logs screen merges that table with Django
+HubAction via GET /api/v1/desk/actions (auth proxies desk/logs).
 apps/parkpe/js/hub.js and apps/payswap/js/hub.js are the browser callers
 of the two mounted routes. Error codes are the strings in
 packages/contracts ErrorCode. Auth events on port 4600 stay in
@@ -179,8 +179,14 @@ def _remember(record: dict) -> None:
     if _SINK is not None:
         try:
             _SINK(record)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOG.exception("action sink failed: %s", exc)
+            try:
+                import sys
+
+                sys.stderr.write(f"hub.actions sink failed: {exc}\n{_dump(record)}\n")
+            except Exception:
+                pass
     if _django_ready():
         _remember_hub(record)
 
@@ -218,16 +224,28 @@ def _remember_hub(record: dict) -> None:
                 request=str(record["request"])[:1000],
                 response=str(record["response"])[:1000],
             )
-        except Exception:
-            return
+        except Exception as exc:
+            LOG.exception("HubAction write failed: %s", exc)
+            try:
+                import sys
+
+                sys.stderr.write(f"hub.actions HubAction failed: {exc}\n{_dump(record)}\n")
+            except Exception:
+                pass
 
     try:
         if transaction.get_connection().in_atomic_block:
             transaction.on_commit(write)
         else:
             write()
-    except Exception:
-        return
+    except Exception as exc:
+        LOG.exception("HubAction schedule failed: %s", exc)
+        try:
+            import sys
+
+            sys.stderr.write(f"hub.actions schedule failed: {exc}\n{_dump(record)}\n")
+        except Exception:
+            pass
 
 
 def _dump(record: dict) -> str:

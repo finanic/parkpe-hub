@@ -8,10 +8,29 @@ import time
 from typing import Any
 
 from core.actions import elapsed_ms, log_action
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from domain.payswap.economics.catalogue import ensure_catalogue
 from domain.payswap.economics.split import compute_economics
 from models.models import BbpsTransaction, ServiceRateRow, ServiceSettlement, TdsAccrual
+
+
+def _settlement_replay(existing: ServiceSettlement) -> dict[str, Any]:
+    return {
+        "applied": False,
+        "reason": "already_settled",
+        "net_credit_paise": int(existing.net_to_retailer_paise),
+        "fee_paise": int(existing.service_charge_paise),
+        "settlement_id": existing.settlement_id,
+        "tds_paise": int(existing.tds_paise),
+        "vendor_commission_paise": int(existing.vendor_commission_paise),
+        "admin_revenue_paise": int(existing.admin_revenue_paise),
+        "retailer_commission_paise": int(existing.retailer_commission_paise),
+        "gst_paise": int(existing.gst_paise),
+        "service_charge_paise": int(existing.service_charge_paise),
+        "net_to_retailer_paise": int(existing.net_to_retailer_paise),
+        "snapshot": existing.rate_snapshot or {},
+    }
 
 
 def settle_success(
@@ -35,21 +54,7 @@ def settle_success(
 
     existing = ServiceSettlement.objects.filter(service=svc, reference=ref).first()
     if existing:
-        return {
-            "applied": False,
-            "reason": "already_settled",
-            "net_credit_paise": int(existing.net_to_retailer_paise),
-            "fee_paise": int(existing.service_charge_paise),
-            "settlement_id": existing.settlement_id,
-            "tds_paise": int(existing.tds_paise),
-            "vendor_commission_paise": int(existing.vendor_commission_paise),
-            "admin_revenue_paise": int(existing.admin_revenue_paise),
-            "retailer_commission_paise": int(existing.retailer_commission_paise),
-            "gst_paise": int(existing.gst_paise),
-            "service_charge_paise": int(existing.service_charge_paise),
-            "net_to_retailer_paise": int(existing.net_to_retailer_paise),
-            "snapshot": existing.rate_snapshot or {},
-        }
+        return _settlement_replay(existing)
 
     if svc == "bbps" and not ServiceRateRow.objects.filter(service="bbps").exists():
         ensure_catalogue(service="bbps", actor="settle")
@@ -63,37 +68,46 @@ def settle_success(
         has_gstin=has_gstin,
         vendor_paise=vendor_paise,
     )
-    settlement = ServiceSettlement.objects.create(
-        settlement_id="stl-" + secrets.token_hex(10),
-        service=svc,
-        reference=ref,
-        user_id=user_id,
-        amount_paise=int(amount_paise),
-        vendor_commission_paise=split["vendor_commission_paise"],
-        admin_revenue_paise=split["admin_revenue_paise"],
-        retailer_commission_paise=split["retailer_commission_paise"],
-        service_charge_paise=split["service_charge_paise"],
-        tds_paise=split["tds_paise"],
-        gst_paise=split["gst_paise"],
-        net_to_retailer_paise=split["net_to_retailer_paise"],
-        rate_snapshot=split["snapshot"],
-        state="settled",
-    )
-
-    if split["tds_paise"] > 0 and not TdsAccrual.objects.filter(service=svc, reference=ref).exists():
-        TdsAccrual.objects.create(
-            accrual_id="tds-" + secrets.token_hex(10),
-            user_id=user_id,
-            service=svc,
-            reference=ref,
-            month=timezone.localdate().strftime("%Y-%m"),
-            tds_paise=split["tds_paise"],
-            tds_paise_withheld=split["tds_paise"],
-            commission_paise=split["retailer_commission_paise"],
-            tds_rate_bps=int(split.get("tds_rate_bps") or 0),
-            tds_basis=str(split.get("tds_basis") or "194h")[:16],
-            status="open",
-        )
+    try:
+        with transaction.atomic():
+            settlement = ServiceSettlement.objects.create(
+                settlement_id="stl-" + secrets.token_hex(10),
+                service=svc,
+                reference=ref,
+                user_id=user_id,
+                amount_paise=int(amount_paise),
+                vendor_commission_paise=split["vendor_commission_paise"],
+                admin_revenue_paise=split["admin_revenue_paise"],
+                retailer_commission_paise=split["retailer_commission_paise"],
+                service_charge_paise=split["service_charge_paise"],
+                tds_paise=split["tds_paise"],
+                gst_paise=split["gst_paise"],
+                net_to_retailer_paise=split["net_to_retailer_paise"],
+                rate_snapshot=split["snapshot"],
+                state="settled",
+            )
+            if split["tds_paise"] > 0 and not TdsAccrual.objects.filter(service=svc, reference=ref).exists():
+                try:
+                    TdsAccrual.objects.create(
+                        accrual_id="tds-" + secrets.token_hex(10),
+                        user_id=user_id,
+                        service=svc,
+                        reference=ref,
+                        month=timezone.localdate().strftime("%Y-%m"),
+                        tds_paise=split["tds_paise"],
+                        tds_paise_withheld=split["tds_paise"],
+                        commission_paise=split["retailer_commission_paise"],
+                        tds_rate_bps=int(split.get("tds_rate_bps") or 0),
+                        tds_basis=str(split.get("tds_basis") or "194h")[:16],
+                        status="open",
+                    )
+                except IntegrityError:
+                    pass
+    except IntegrityError:
+        raced = ServiceSettlement.objects.filter(service=svc, reference=ref).first()
+        if raced is not None:
+            return _settlement_replay(raced)
+        raise
 
     if bbps_tx is not None:
         bbps_tx.vendor_commission_paise = split["vendor_commission_paise"]

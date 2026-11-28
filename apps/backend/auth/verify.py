@@ -24,9 +24,29 @@ from integrations.cashfree_signature import build_x_cf_signature
 from integrations.kaleyra import send_otp
 
 PAN_RE = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+GSTIN_RE = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
+UDYAM_RE = re.compile(r"^UDYAM-[A-Z]{2}-[0-9]{2}-[0-9]{7}$")
+_NAME_SKIP = {
+    "PRIVATE",
+    "LIMITED",
+    "PVT",
+    "LTD",
+    "LLP",
+    "ENTERPRISES",
+    "ENTERPRISE",
+    "STORE",
+    "SHOP",
+    "AND",
+    "THE",
+}
 OTP_CODE_TTL = 10 * 60
 # Desk signup rows stay until the account opens or an operator cancels them.
-SIGNUP_INTENT_EXPIRES = 2_147_483_647
+SIGNUP_INTENT_TTL = 24 * 60 * 60
+
+
+def signup_expires_at(now: int | None = None) -> int:
+    base = int(time.time()) if now is None else int(now)
+    return base + SIGNUP_INTENT_TTL
 
 
 def normalize_mobile(value: object) -> str | None:
@@ -73,6 +93,51 @@ def mask_pan_name(name: str) -> str:
     if len(clean) <= 24:
         return clean
     return clean[:24] + "…"
+
+
+def normalize_gstin(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    gstin = value.strip().upper()
+    if not GSTIN_RE.fullmatch(gstin):
+        return None
+    return gstin
+
+
+def gstin_embeds_pan(gstin: str, pan: str) -> bool:
+    return bool(gstin) and bool(pan) and gstin[2:12] == pan
+
+
+def normalize_udyam(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    udyam = value.strip().upper().replace(" ", "")
+    if not UDYAM_RE.fullmatch(udyam):
+        return None
+    return udyam
+
+
+def names_overlap(left: str, right: str) -> bool:
+    """True when two registry names share a meaningful word."""
+    def tokens(value: str) -> set[str]:
+        words = re.findall(r"[A-Z0-9]+", (value or "").upper())
+        return {word for word in words if len(word) >= 4 and word not in _NAME_SKIP}
+
+    one, two = tokens(left), tokens(right)
+    return bool(one and two and one & two)
+
+
+def normalize_shop_point(lat: object, lng: object) -> tuple[str, str] | None:
+    try:
+        lat_n = float(lat)
+        lng_n = float(lng)
+    except (TypeError, ValueError):
+        return None
+    if not (-90 <= lat_n <= 90 and -180 <= lng_n <= 180):
+        return None
+    if abs(lat_n) < 0.01 and abs(lng_n) < 0.01:
+        return None
+    return f"{lat_n:.6f}", f"{lng_n:.6f}"
 
 
 def normalize_aadhaar(value: object) -> str | None:
@@ -302,6 +367,85 @@ class LiveVerify:
         ok, _registered = self.pan_verify(pan, name)
         return ok
 
+    def gstin_verify(self, gstin: str) -> tuple[bool, dict]:
+        # Cashfree Secure ID POST /verification/gstin. The number stays out of the log.
+        started = time.perf_counter()
+        req_text = 'POST /verification/gstin\n{"GSTIN":"[redacted]"}'
+        if not _cashfree_ready():
+            _provider_log("integration.cashfree.gstin", ok=False, status=503, started=started, target="gstin", reason="Verification provider is not configured.", request=req_text)
+            return False, {}
+        data, http_status, provider_reason = _cashfree_call("/verification/gstin", {"GSTIN": gstin})
+        if not data:
+            reason = provider_reason or "Verification provider rejected the check."
+            _provider_log(
+                "integration.cashfree.gstin",
+                ok=False,
+                status=http_status if http_status >= 400 else 502,
+                started=started,
+                target="gstin",
+                reason=reason,
+                request=req_text,
+            )
+            return False, {}
+        status = str(data.get("gst_in_status") or "").strip().upper()
+        valid = data.get("valid")
+        ok = status == "ACTIVE" or (valid is True and status in {"", "ACTIVE"})
+        record = {
+            "legal_name": str(data.get("legal_name_of_business") or "").strip(),
+            "trade_name": str(data.get("trade_name_of_business") or "").strip(),
+            "status": status or ("ACTIVE" if valid is True else ""),
+        }
+        _provider_log(
+            "integration.cashfree.gstin",
+            ok=ok,
+            status=200,
+            started=started,
+            target="gstin",
+            reason="" if ok else "Verification provider rejected the check.",
+            request=req_text,
+            response=f"HTTP 200\n{json.dumps({'status': record['status'], 'valid': bool(ok)})}",
+        )
+        return ok, record
+
+    def udyam_verify(self, udyam: str, verification_id: str) -> tuple[bool, str]:
+        # Cashfree Secure ID POST /verification/udyam.
+        started = time.perf_counter()
+        safe_id = re.sub(r"[^A-Za-z0-9._-]", "", verification_id)[:50] or "signup"
+        req_text = f"POST /verification/udyam\n{json.dumps({'verification_id': safe_id, 'udyam': '[redacted]'})}"
+        if not _cashfree_ready():
+            _provider_log("integration.cashfree.udyam", ok=False, status=503, started=started, target="udyam", reason="Verification provider is not configured.", request=req_text)
+            return False, ""
+        data, http_status, provider_reason = _cashfree_call(
+            "/verification/udyam",
+            {"verification_id": safe_id, "udyam": udyam},
+        )
+        if not data:
+            reason = provider_reason or "Verification provider rejected the check."
+            _provider_log(
+                "integration.cashfree.udyam",
+                ok=False,
+                status=http_status if http_status >= 400 else 502,
+                started=started,
+                target="udyam",
+                reason=reason,
+                request=req_text,
+            )
+            return False, ""
+        status = str(data.get("status") or "").upper()
+        enterprise = str(data.get("enterprise_name") or "").strip()
+        ok = status == "SUCCESS" and bool(enterprise)
+        _provider_log(
+            "integration.cashfree.udyam",
+            ok=ok,
+            status=200,
+            started=started,
+            target="udyam",
+            reason="" if ok else "Verification provider rejected the check.",
+            request=req_text,
+            response=f"HTTP 200\n{json.dumps({'status': status, 'name_present': bool(enterprise)})}",
+        )
+        return ok, enterprise
+
 
 def _provider_log(
     action: str,
@@ -364,11 +508,11 @@ def _load_cashfree_lines(text: str) -> None:
 
 
 def load_cashfree_env(path: Path | None = None) -> None:
-    """Fill unset Cashfree keys from apps/backend/data/cashfree.env.
+    """Fill unset Cashfree keys from data/cashfree.env (fallback).
 
-    auth.server.main calls this before AuthApp. Lines named CASHFREE_* in any
-    file under data/*.env are also read so they are not confused with Kaleyra.
-    KALEYRA_API_KEY does not cover DigiLocker. A value already in the
+    Prefer apps/backend/.env via config.envfile.load_backend_env first.
+    auth.server.main / manage.py call that before this helper. Lines named
+    CASHFREE_* under data/*.env remain a fallback. A value already in the
     environment wins.
     """
     root = Path(__file__).resolve().parents[1]
@@ -406,10 +550,11 @@ def load_cashfree_env(path: Path | None = None) -> None:
 
 
 def load_mail_env(path: Path | None = None) -> None:
-    """Fill unset mail paths from apps/backend/data/mail.env.
+    """Fill unset mail paths from data/mail.env (fallback).
 
-    auth.server.main calls this before AuthApp. otp-mail.php reads the two
-    names. A value already in the environment wins. Other names are ignored.
+    Prefer AUTH_MAIL_CONFIG / AUTH_SES_SMTP_PHP in apps/backend/.env
+    (config.envfile.load_backend_env). otp-mail.php reads those two names.
+    A value already in the environment wins. Other names are ignored.
     """
     file = path or Path(__file__).resolve().parents[1] / "data" / "mail.env"
     allowed = {"AUTH_MAIL_CONFIG", "AUTH_SES_SMTP_PHP"}

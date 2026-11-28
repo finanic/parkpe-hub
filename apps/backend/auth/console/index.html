@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/console.css?v=53" />
+    <link rel="stylesheet" href="/console.css?v=62" />
   </head>
   <body>
     <a class="skip" href="#content">Skip to desk</a>
@@ -365,6 +365,19 @@
                   <label>PAN<input name="pan" autocapitalize="characters" autocomplete="off" placeholder="ABCDE1234F" /></label>
                   <label>Name on PAN<input name="pan_name" autocomplete="off" placeholder="Name on the card" /></label>
                 </div>
+                <div data-add="business" hidden>
+                  <label>GSTIN<input name="gstin" autocapitalize="characters" autocomplete="off" placeholder="15-character GSTIN" /></label>
+                  <label>Udyam<input name="udyam" autocapitalize="characters" autocomplete="off" placeholder="UDYAM-RJ-00-0000000" /></label>
+                  <label>Outlet name<input name="outlet_name" autocomplete="off" placeholder="Name on the shop board" /></label>
+                  <label>Latitude<input name="lat" inputmode="decimal" autocomplete="off" placeholder="Captured at this desk" readonly /></label>
+                  <label>Longitude<input name="lng" inputmode="decimal" autocomplete="off" placeholder="Captured at this desk" readonly /></label>
+                  <input name="location_source" type="hidden" value="" />
+                  <button class="quiet" type="button" data-add-locate>Use this desk's location</button>
+                  <p class="note">Stand at the outlet and capture this desk's location. Typed coordinates are not accepted. Sign-in stays closed until you approve the outlet.</p>
+                </div>
+                <div data-add="review" hidden>
+                  <p class="note" data-add-review>Business records matched. Approve to open sign-in.</p>
+                </div>
                 <div data-add="done" hidden>
                   <p class="add-done-title">Account created</p>
                   <p class="note" data-add-success><strong data-add-success-email></strong> is ready as <span data-add-success-role></span>.</p>
@@ -423,6 +436,13 @@
                   <p>Recent BBPS collections and voucher orders across retailers.</p>
                   <span class="payswap-hub-cta">View activity</span>
                 </button>
+                <button type="button" class="payswap-hub-card" data-payswap-open="bulk">
+                  <span class="payswap-hub-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
+                  <span class="payswap-hub-kicker">Bulk BBPS</span>
+                  <strong>Bulk bill batches</strong>
+                  <p>Oversight of Excel uploads, fetch/pay progress, pipe, and float consumed.</p>
+                  <span class="payswap-hub-cta">Open batches</span>
+                </button>
                 <button type="button" class="payswap-hub-card" data-payswap-open="commission">
                   <span class="payswap-hub-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
                   <span class="payswap-hub-kicker">Finance</span>
@@ -445,35 +465,72 @@
                   <button class="select" type="button" data-payswap-open="hub">Back</button>
                 </div>
               </div>
-              <section class="card room-card">
+              <section class="card room-card policy-work">
                 <div class="panel-head">
                   <div>
                     <h2>Services, rails &amp; limits</h2>
-                    <p>Decide what every retailer gets before any account-level override.</p>
+                    <p>Set the platform default first. Per-retailer overrides only change one account.</p>
                   </div>
+                  <button class="primary" type="submit" form="default-policy-form">Save default policy</button>
                 </div>
-                <form id="default-policy-form" class="policy-form">
-                  <div class="policy-section">
-                    <h3>Counter services</h3>
+                <form id="default-policy-form" class="policy-form policy-form-stack">
+                  <div class="policy-block">
+                    <div class="policy-block-head">
+                      <h3>Counter services</h3>
+                      <p>Tick the products that appear on every new retailer counter.</p>
+                    </div>
                     <div class="policy-checks" data-default-services-boxes></div>
                   </div>
-                  <div class="policy-section">
-                    <h3>Payment rails</h3>
+                  <div class="policy-block">
+                    <div class="policy-block-head">
+                      <h3>Payment rails</h3>
+                      <p>Choose how retailers can collect and top up float.</p>
+                    </div>
                     <div class="policy-rails">
-                      <label><input type="checkbox" name="allow_wallet_pay" /> Allow Wallet payments</label>
-                      <label><input type="checkbox" name="allow_pg_pay" /> Allow direct Payment Gateway (PG) payments</label>
-                      <label><input type="checkbox" name="allow_pg_topup" /> Allow PG wallet top-ups</label>
+                      <label class="policy-check-tile"><input type="checkbox" name="allow_wallet_pay" /><span class="policy-check-copy"><strong>Wallet pay</strong><small>Debit retailer float at the counter</small></span></label>
+                      <label class="policy-check-tile"><input type="checkbox" name="allow_pg_pay" /><span class="policy-check-copy"><strong>Direct PG</strong><small>Customer pays the gateway for the service</small></span></label>
+                      <label class="policy-check-tile"><input type="checkbox" name="allow_pg_topup" /><span class="policy-check-copy"><strong>PG top-up</strong><small>Retailer loads wallet via PayU / Cashfree</small></span></label>
+                    </div>
+                    <div class="policy-limits policy-pg-provider">
+                      <label>PG provider
+                        <select name="pg_provider">
+                          <option value="both">Both (PayU + Cashfree)</option>
+                          <option value="payu">PayU only</option>
+                          <option value="cashfree">Cashfree only</option>
+                        </select>
+                      </label>
                     </div>
                   </div>
-                  <div class="policy-section">
-                    <h3>Wallet limits</h3>
+                  <div class="policy-block">
+                    <div class="policy-block-head">
+                      <h3>BBPS pipe &amp; bulk</h3>
+                      <p>Fetch and pay use the assigned pipe. Bulk bills stay wallet-funded.</p>
+                    </div>
+                    <div class="policy-limits">
+                      <label>Default BBPS pipe
+                        <select name="bbps_pipe">
+                          <option value="mobikwik">Mobikwik</option>
+                          <option value="pipe_b">Pipe B (reserved)</option>
+                        </select>
+                      </label>
+                      <label class="policy-check-tile policy-check-tile-inline"><input type="checkbox" name="bbps_bulk_enabled" /><span class="policy-check-copy"><strong>Bulk bills</strong><small>Enable on new retailer counters</small></span></label>
+                    </div>
+                  </div>
+                  <div class="policy-block">
+                    <div class="policy-block-head">
+                      <h3>Wallet limits</h3>
+                      <p>Default rupee caps before any account-level override.</p>
+                    </div>
                     <div class="policy-limits">
                       <label>Default per-txn limit (₹)<input name="default_per_txn_limit" type="number" min="1" step="1" /></label>
                       <label>Default daily debit limit (₹)<input name="default_daily_debit_limit" type="number" min="1" step="1" /></label>
                       <label>Default min balance (₹)<input name="default_min_balance" type="number" min="0" step="1" /></label>
                     </div>
                   </div>
-                  <div class="policy-commit"><button class="primary" type="submit">Save default policy</button></div>
+                  <div class="policy-commit">
+                    <p class="hint">Changes apply to new retailers and accounts that still follow the default.</p>
+                    <button class="primary" type="submit">Save default policy</button>
+                  </div>
                 </form>
               </section>
             </div>
@@ -486,21 +543,38 @@
                   <p>Control which bill categories appear on every retailer counter by default.</p>
                 </div>
                 <div class="room-actions">
+                  <button class="select" type="button" data-payswap-open="policy">Default policy</button>
                   <button class="select" type="button" data-payswap-open="retailers">Per-retailer overrides</button>
                   <button class="select" type="button" data-payswap-open="hub">Back</button>
                 </div>
               </div>
-              <section class="card room-card">
+              <section class="ledger-stats bbps-cat-stats" aria-label="BBPS category summary">
+                <article class="card ledger-stat"><span class="ledger-stat-icon" aria-hidden="true">On</span><div><strong data-bbps-cat-enabled>0</strong><small>Enabled by default</small><p data-bbps-cat-enabled-note>Curated list</p></div></article>
+                <article class="card ledger-stat"><span class="ledger-stat-icon" aria-hidden="true">All</span><div><strong data-bbps-cat-total>0</strong><small>Catalogue categories</small><p data-bbps-cat-total-note>From Mobikwik sheet</p></div></article>
+                <article class="card ledger-stat"><span class="ledger-stat-icon is-ok" aria-hidden="true">Mode</span><div><strong data-bbps-cat-mode>Curated</strong><small>Default mode</small><p>Show-all overrides the ticks</p></div></article>
+              </section>
+              <section class="card room-card policy-work">
                 <div class="panel-head">
                   <div>
                     <h2>Default BBPS categories</h2>
-                    <p>Unchecked categories stay hidden unless a retailer has an Allow override. Turn on Show all for the full catalogue.</p>
+                    <p>Open a category to allow or disallow billers inside it. Unchecked categories stay hidden unless a retailer has an Allow override.</p>
                   </div>
-                  <label class="payswap-inline-check"><input type="checkbox" data-bbps-unrestricted /> Show all categories</label>
+                  <button class="primary" type="button" data-bbps-cats-save>Save BBPS categories</button>
                 </div>
-                <div class="policy-form">
-                  <div class="policy-checks" data-default-bbps-cats></div>
-                  <div class="policy-commit"><button class="primary" type="button" data-bbps-cats-save>Save BBPS categories</button></div>
+                <div class="toolbar bbps-cat-toolbar">
+                  <label class="payswap-inline-check bbps-show-all"><input type="checkbox" data-bbps-unrestricted /> Show all categories</label>
+                  <label class="bbps-cat-search">Search
+                    <input type="search" data-bbps-cat-search placeholder="Category name…" autocomplete="off" />
+                  </label>
+                </div>
+                <div class="policy-form policy-form-stack">
+                  <div class="bbps-cat-list" data-default-bbps-cats>
+                    <p class="note">Loading BBPS categories…</p>
+                  </div>
+                  <div class="policy-commit">
+                    <p class="hint" data-bbps-cat-filter-note></p>
+                    <button class="primary" type="button" data-bbps-cats-save>Save BBPS categories</button>
+                  </div>
                 </div>
               </section>
             </div>
@@ -510,39 +584,61 @@
                 <div>
                   <p class="eyebrow">PaySwap · Per account</p>
                   <h1>Manage retailer services</h1>
-                  <p>Select a retailer ID, control their counter, then set that account’s share on each row of the BBPS, AEPS, or other service sheet.</p>
+                  <p>Load one retailer ID, set counter access, then edit that account’s commission sheet service by service.</p>
                 </div>
-                <div class="room-actions">
+                <div class="room-actions payswap-retailer-picker">
+                  <label class="retailer-pick-label">Retailer account
+                    <select data-retailer-svc-select>
+                      <option value="">Select retailer…</option>
+                    </select>
+                  </label>
+                  <button class="primary" type="button" data-retailer-svc-load>Load</button>
                   <button class="select" type="button" data-payswap-open="commission" data-econ-target="commission">Economics default</button>
                   <button class="select" type="button" data-payswap-open="hub">Back</button>
                 </div>
               </div>
 
-              <section class="card room-card">
-                <div class="panel-head">
-                  <div>
-                    <h2>Select retailer</h2>
-                    <p>Overrides and commission rates apply only to the loaded account ID.</p>
-                  </div>
-                </div>
-                <div class="room-body">
-                  <div class="policy-limits payswap-retailer-picker">
-                    <label>Retailer account
-                      <select data-retailer-svc-select>
-                        <option value="">Select retailer…</option>
-                      </select>
-                    </label>
-                    <button class="primary" type="button" data-retailer-svc-load>Load account</button>
-                  </div>
-                </div>
-              </section>
-
               <div class="retailer-desk" data-retailer-svc-panel>
                 <div class="commission-empty">
-                  <strong>Select a retailer</strong>
-                  <p>Load an account (R00…) to open counter controls and that retailer’s commission sheet.</p>
+                  <strong>No retailer loaded</strong>
+                  <p>Choose a retailer account above to open counter access and the commission sheet.</p>
                 </div>
               </div>
+            </div>
+
+            <div data-payswap-view="bulk" hidden>
+              <div class="room-head">
+                <div>
+                  <p class="eyebrow">PaySwap · Bulk BBPS</p>
+                  <h1>Bulk bill batches</h1>
+                  <p>Support view for retailer Excel batches — pipe, fetch/pay rates, and sync stuck fetches.</p>
+                </div>
+                <div class="room-actions">
+                  <button class="select" type="button" data-bulk-desk-refresh>Refresh</button>
+                  <button class="select" type="button" data-payswap-open="hub">Back</button>
+                </div>
+              </div>
+              <section class="ledger-stats payswap-activity-stats" aria-label="Bulk batch summary">
+                <article class="card ledger-stat">
+                  <span class="ledger-stat-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+                  <div><strong data-bulk-desk-count>0</strong><small>Batches</small><p data-bulk-desk-meta>Recent uploads</p></div>
+                </article>
+                <article class="card ledger-stat">
+                  <span class="ledger-stat-icon is-ok" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+                  <div><strong data-bulk-desk-paid>₹0.00</strong><small>Paid volume</small><p data-bulk-desk-payok>0 pay ok</p></div>
+                </article>
+                <article class="card ledger-stat">
+                  <span class="ledger-stat-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 3 6-7"/></svg></span>
+                  <div><strong data-bulk-desk-fetchfail>0</strong><small>Fetch fails</small><p>Across listed batches</p></div>
+                </article>
+              </section>
+              <section class="card room-card">
+                <div class="panel-head">
+                  <div><h2>Batches</h2><p>Filter by retailer ID (R00…) or batch id. Sync re-runs pending fetches.</p></div>
+                  <label class="transaction-search"><input type="search" data-bulk-desk-q placeholder="Retailer, batch, file" /></label>
+                </div>
+                <div class="table-wrap" data-bulk-desk-table><p class="note">Loading bulk batches…</p></div>
+              </section>
             </div>
 
             <div data-payswap-view="activity" hidden>
@@ -1000,6 +1096,15 @@
                   <label>PAN<input name="pan" autocapitalize="characters" autocomplete="off" placeholder="ABCDE1234F" required /></label>
                   <label>Name on PAN<input name="pan_name" autocomplete="off" placeholder="Name on the card" required /></label>
                 </div>
+                <div data-resume="business" hidden>
+                  <label>GSTIN<input name="gstin" autocapitalize="characters" autocomplete="off" placeholder="15-character GSTIN" /></label>
+                  <label>Udyam<input name="udyam" autocapitalize="characters" autocomplete="off" placeholder="UDYAM-RJ-00-0000000" /></label>
+                  <label>Outlet name<input name="outlet_name" autocomplete="off" placeholder="Name on the shop board" /></label>
+                  <label>Latitude<input name="lat" inputmode="decimal" autocomplete="off" placeholder="Captured at this desk" readonly /></label>
+                  <label>Longitude<input name="lng" inputmode="decimal" autocomplete="off" placeholder="Captured at this desk" readonly /></label>
+                  <input name="location_source" type="hidden" value="" />
+                  <button class="quiet" type="button" data-resume-locate>Use this desk's location</button>
+                </div>
                 <p class="error" data-resume-error hidden></p>
                 <button class="primary" type="submit" data-resume-submit>Continue</button>
                 <p class="hint" data-resume-hint></p>
@@ -1015,19 +1120,75 @@
           <div class="room" data-panel="reports" hidden>
             <div class="room-head">
               <div>
-                <p class="eyebrow">Operations &amp; Analytics</p>
+                <p class="eyebrow">Operations</p>
                 <h1>Transaction reports</h1>
-                <p>Complete records across BBPS collections, retailer UTR fund requests, Cashfree PG orders, double-entry wallet ledger, holds, and vouchers.</p>
+                <p>Inspect BBPS, fund requests, PG orders, wallet ledger, holds, and vouchers. Filter first, then open one record.</p>
               </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <button class="select" type="button" id="report-export-csv">Export CSV</button>
-                <button class="select" type="button" data-jump="fund-requests">Fund Requests</button>
+              <div class="room-actions">
+                <button class="select" type="button" data-jump="fund-requests">Fund requests</button>
+                <button class="select" type="button" data-jump="logs">Audit logs</button>
               </div>
             </div>
             <section class="ledger-stats" aria-label="Transaction report summary">
-              <article class="card ledger-stat"><span class="ledger-stat-icon">₹</span><div><strong data-rep-bbps-vol>₹0.00</strong><small>BBPS volume</small><p data-rep-bbps-counts>0 txns</p></div></article>
-              <article class="card ledger-stat"><span class="ledger-stat-icon is-ok">PG</span><div><strong data-rep-pg-vol>₹0.00</strong><small>PG orders</small><p data-rep-pg-counts>0 orders</p></div></article>
-              <article class="card ledger-stat"><span class="ledger-stat-icon">≋</span><div><strong data-rep-ledger-count>0</strong><small>Wallet ledger</small><p data-rep-ledger-vol>CR ₹0 · DR ₹0</p></div></article>
+              <article class="card ledger-stat"><span class="ledger-stat-icon">₹</span><div><strong data-rep-bbps-vol>₹0.00</strong><small>BBPS settled volume</small><p data-rep-bbps-counts>0 txns</p></div></article>
+              <article class="card ledger-stat"><span class="ledger-stat-icon is-ok">PG</span><div><strong data-rep-pg-vol>₹0.00</strong><small>PG paid volume</small><p data-rep-pg-counts>0 orders</p></div></article>
+              <article class="card ledger-stat"><span class="ledger-stat-icon">≋</span><div><strong data-rep-ledger-count>0</strong><small>Wallet ledger rows</small><p data-rep-ledger-vol>CR ₹0 · DR ₹0</p></div></article>
+            </section>
+            <section class="card room-card reports-work">
+              <div class="panel-head">
+                <div>
+                  <h2 data-report-table-title>BBPS transactions</h2>
+                  <p data-report-table-hint>Apply filters, then open a row for the full record.</p>
+                </div>
+                <div class="reports-head-actions">
+                  <p class="note reports-load-status" data-report-load-status hidden aria-live="polite">Loading…</p>
+                  <button class="select" type="button" data-report-export>Export CSV</button>
+                </div>
+              </div>
+              <div class="toolbar reports-toolbar">
+                <div class="segments reports-tabs" data-report-tabs role="tablist" aria-label="Report type">
+                  <button class="is-on" type="button" data-report-tab="bbps" role="tab" aria-selected="true">BBPS <span data-rep-tab-count="bbps">0</span></button>
+                  <button type="button" data-report-tab="topups" role="tab" aria-selected="false">Fund requests <span data-rep-tab-count="topups">0</span></button>
+                  <button type="button" data-report-tab="pg" role="tab" aria-selected="false">PG orders <span data-rep-tab-count="pg">0</span></button>
+                  <button type="button" data-report-tab="ledger" role="tab" aria-selected="false">Ledger <span data-rep-tab-count="ledger">0</span></button>
+                  <button type="button" data-report-tab="holds" role="tab" aria-selected="false">Holds <span data-rep-tab-count="holds">0</span></button>
+                  <button type="button" data-report-tab="vouchers" role="tab" aria-selected="false">Vouchers <span data-rep-tab-count="vouchers">0</span></button>
+                </div>
+                <form id="report-filter-form" class="reports-filters">
+                  <label>Retailer<input name="email" type="search" list="retailer-email-list" placeholder="email@outlet.in" autocomplete="off" /></label>
+                  <label class="reports-filter-status"><span data-report-status-label>Status</span>
+                    <select name="state">
+                      <option value="all">All</option>
+                      <option value="success">Success</option>
+                      <option value="pending">Pending</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                  </label>
+                  <label class="reports-filter-bbps">Payment rail
+                    <select name="channel">
+                      <option value="all">All</option>
+                      <option value="wallet">Wallet</option>
+                      <option value="pg">PG</option>
+                    </select>
+                  </label>
+                  <label class="reports-filter-bbps">BBPS source
+                    <select name="source">
+                      <option value="all">All sources</option>
+                      <option value="single">Single bill</option>
+                      <option value="bulk">Bulk batch</option>
+                    </select>
+                  </label>
+                  <label class="reports-filter-bbps">Batch id<input name="batch_id" type="search" placeholder="bbulk-…" autocomplete="off" /></label>
+                  <label class="reports-filter-search">Search<input name="q" type="search" placeholder="Ref, UTR, biller, order id…" autocomplete="off" /></label>
+                  <div class="reports-filter-actions">
+                    <button class="select" type="button" id="report-reset-btn">Reset</button>
+                    <button class="select" type="button" data-report-export>Export CSV</button>
+                    <button class="primary" type="submit">Apply</button>
+                  </div>
+                </form>
+              </div>
+              <div class="table-wrap reports-table" data-report-table><p class="note">Loading transaction reports…</p></div>
+              <div class="log-pagination reports-pagination" data-report-pagination hidden></div>
             </section>
             <section class="card log-read" data-report-detail hidden>
               <div class="panel-head">
@@ -1042,47 +1203,6 @@
                 </div>
               </div>
               <dl class="log-facts" data-report-detail-facts></dl>
-            </section>
-            <section class="card room-card">
-              <div class="panel-head">
-                <div><h2>Filter &amp; inspect</h2><p>Filter by retailer email, status, payment rail, or keyword, then inspect any complete record or export CSV.</p></div>
-                <button class="select" type="button" id="report-reset-btn">Reset filters</button>
-              </div>
-              <div class="room-body">
-                <form id="report-filter-form" class="policy-limits">
-                  <label>Retailer email<input name="email" type="search" list="retailer-email-list" placeholder="Filter by retailer email..." /></label>
-                  <label>Search ref / UTR / biller / ID<input name="q" type="search" placeholder="Ref, UTR, vendor ID, account..." /></label>
-                  <label>BBPS status
-                    <select name="state">
-                      <option value="all">All statuses</option>
-                      <option value="success">Success</option>
-                      <option value="pending">Pending</option>
-                      <option value="failed">Failed</option>
-                    </select>
-                  </label>
-                  <label>Payment rail
-                    <select name="channel">
-                      <option value="all">All rails</option>
-                      <option value="wallet">Wallet</option>
-                      <option value="pg">Payment Gateway (PG)</option>
-                    </select>
-                  </label>
-                  <button class="primary" type="submit">Apply filters</button>
-                </form>
-                <div class="segments" data-report-tabs style="flex-wrap:wrap">
-                  <button class="is-on" type="button" data-report-tab="bbps">BBPS Transactions <span data-rep-tab-count="bbps">0</span></button>
-                  <button type="button" data-report-tab="topups">Fund Requests <span data-rep-tab-count="topups">0</span></button>
-                  <button type="button" data-report-tab="pg">PG Orders <span data-rep-tab-count="pg">0</span></button>
-                  <button type="button" data-report-tab="ledger">Wallet Ledger <span data-rep-tab-count="ledger">0</span></button>
-                  <button type="button" data-report-tab="holds">Wallet Holds <span data-rep-tab-count="holds">0</span></button>
-                  <button type="button" data-report-tab="vouchers">Voucher Orders <span data-rep-tab-count="vouchers">0</span></button>
-                </div>
-              </div>
-              <div class="table-wrap" data-report-table><p class="note">Loading transaction reports…</p></div>
-            </section>
-            <section class="report-grid" style="margin-top:16px">
-              <article class="card report-card"><span class="report-icon">◷</span><h2>Audit trail</h2><p>Filter authentication and provider activity without exposing protected values.</p><button class="text" type="button" data-jump="logs">Open audit logs</button></article>
-              <article class="card report-card"><span class="report-icon">✓</span><h2>Onboarding health</h2><p>See pending signup verification work and resume the appropriate workflow.</p><button class="text" type="button" data-jump="verification">Open verification</button></article>
             </section>
           </div>
           <div class="room" data-panel="logs" hidden>
@@ -1184,6 +1304,6 @@
     </form>
     <script src="/qr.js?v=10"></script>
     <div class="toast" id="toast" role="status"></div>
-    <script src="/console.js?v=68"></script>
+    <script src="/console.js?v=83"></script>
   </body>
 </html>

@@ -26,3 +26,19 @@ make api
 | `tests` | Tests for this package. The suite that runs today is `apps/backend/tests/test_auth.py`. |
 
 `domain/parkpe` does not import `domain/payswap`. A ParkPe caller (`customer`, context `parkpe`) does not enter a PaySwap use case, and the reverse. Hiding a button in `apps/parkpe` or `apps/payswap` is not the check.
+
+## PayU troubleshooting
+
+Hosted Checkout lives in `integrations/payu.py` and `domain/payswap/payu_checkout.py`. Routes: `POST /api/payu/initiate`, `POST /api/payu/success`, `POST /api/payu/failure`, `GET /api/payu/verify/<order_id>`.
+
+Set in `apps/backend/.env` (never commit): `PAYU_MERCHANT_KEY`, `PAYU_MERCHANT_SALT` (Salt-32), optional `PAYU_MERCHANT_SALT_V2` (Salt-256 for dual), `PAYU_HASH_MODE` (`v1` or `dual`; empty auto-dual when SALT_V2 is set), `PAYU_ENV=test|production`, `APP_BASE_URL=http://127.0.0.1:4610`. Admin default policy `pg_provider` is `cashfree` | `payu` | `both`.
+
+| Symptom | Check |
+| --- | --- |
+| Invalid / incorrectly calculated hash | Key + Salt-32 must be the pair from the same PayU env; amount `x.xx`; udf pipes. If PayU shows `{"v1","v2"}`, set Salt-256 as `PAYU_MERCHANT_SALT_V2` and use dual mode |
+| Duplicate txnid | Each attempt gets a new txnid from initiate |
+| surl/furl never hits | `APP_BASE_URL` must reach Django :4610; callbacks are CSRF-exempt form POSTs |
+| Order stuck pending | `GET /api/payu/verify/<order_id>` or Verify on the counter |
+| Works in test, fails in prod | Switch `PAYU_ENV` and credentials together |
+
+Never log key, salt, hash inputs, or raw callback bodies with PII.

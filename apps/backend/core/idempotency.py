@@ -176,6 +176,9 @@ def run_once_external(*, app_context: str, user_id: str, endpoint: str, key: str
                             "idempotency_conflict",
                             409,
                         )
+                    if existing.state == "pending" and (existing.body or {}).get("resume"):
+                        record_id = existing.pk
+                        break
                     if existing.state == "pending":
                         raise IdempotencyProblem(
                             "This payment request is already in progress.",
@@ -219,7 +222,23 @@ def run_once_external(*, app_context: str, user_id: str, endpoint: str, key: str
     try:
         status, body = produce()
     except Exception:
-        IdempotencyRecord.objects.filter(pk=record_id, state="pending").delete()
+        # A vendor call may already have used this key's reference. Keep the row
+        # so the retry resumes that reference instead of minting another payment.
+        kept = False
+        from models.models import BbpsTransaction
+
+        tx = (
+            BbpsTransaction.objects.filter(user_id=user_id, idempotency_key=cleaned)
+            .order_by("id")
+            .first()
+        )
+        if tx is not None:
+            IdempotencyRecord.objects.filter(pk=record_id, state="pending").update(
+                body={"reference": tx.reference, "resume": True}
+            )
+            kept = True
+        if not kept:
+            IdempotencyRecord.objects.filter(pk=record_id, state="pending").delete()
         raise
 
     ref = _reference(body)

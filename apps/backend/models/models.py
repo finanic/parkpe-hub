@@ -60,9 +60,16 @@ class DefaultServicePolicy(models.Model):
     enabled_services = models.JSONField(default=list)
     # Empty list = every BBPS category is allowed. Non-empty = allow-list.
     enabled_bbps_categories = models.JSONField(default=list, blank=True)
+    # category_id -> [biller_id, ...]. Missing key = all billers in that category.
+    bbps_biller_allowlist = models.JSONField(default=dict, blank=True)
     allow_wallet_pay = models.BooleanField(default=True)
     allow_pg_pay = models.BooleanField(default=True)
     allow_pg_topup = models.BooleanField(default=True)
+    # cashfree | payu | both — which PG provider(s) are live for top-up and direct pay.
+    pg_provider = models.CharField(max_length=16, default="both")
+    # BBPS provider pipe for fetch/pay: mobikwik | pipe_b
+    bbps_pipe = models.CharField(max_length=32, default="mobikwik")
+    bbps_bulk_enabled = models.BooleanField(default=False)
     default_per_txn_limit_paise = models.BigIntegerField(default=5_000_000)
     default_daily_debit_limit_paise = models.BigIntegerField(default=20_000_000)
     default_min_balance_paise = models.BigIntegerField(default=0)
@@ -80,6 +87,9 @@ class RetailerEntitlement(models.Model):
     allow_wallet_pay = models.BooleanField(null=True, blank=True)
     allow_pg_pay = models.BooleanField(null=True, blank=True)
     allow_pg_topup = models.BooleanField(null=True, blank=True)
+    # Empty string = inherit default policy pipe. Otherwise mobikwik | pipe_b.
+    bbps_pipe = models.CharField(max_length=32, blank=True, default="")
+    bbps_bulk_enabled = models.BooleanField(null=True, blank=True)
     updated_by = models.CharField(max_length=320, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -162,6 +172,11 @@ class WalletLedgerEntry(models.Model):
                 fields=["wallet", "reference", "entry_type"],
                 name="uniq_wallet_ref_entry_type",
             ),
+            models.UniqueConstraint(
+                fields=["wallet", "idempotency_key", "entry_type"],
+                condition=~Q(idempotency_key=""),
+                name="uniq_ledger_idempotency_entry",
+            ),
             models.CheckConstraint(
                 condition=Q(amount_paise__gt=0),
                 name="chk_ledger_amount_pos",
@@ -184,6 +199,23 @@ class WalletTopupRequest(models.Model):
     review_note = models.CharField(max_length=200, blank=True, default="")
     reviewed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class WalletAdjustment(models.Model):
+    """Large desk credit or debit waiting for a second admin."""
+
+    adjustment_id = models.CharField(max_length=64, unique=True)
+    user_id = models.CharField(max_length=320, db_index=True)
+    direction = models.CharField(max_length=4)
+    amount_paise = models.BigIntegerField()
+    reason = models.CharField(max_length=200)
+    idempotency_key = models.CharField(max_length=200, unique=True)
+    status = models.CharField(max_length=16, default="pending")
+    requested_by = models.CharField(max_length=320)
+    reviewed_by = models.CharField(max_length=320, blank=True, default="")
+    review_note = models.CharField(max_length=200, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
 
 
 class PgOrder(models.Model):
@@ -230,6 +262,9 @@ class BbpsTransaction(models.Model):
     commission_rate_snapshot = models.JSONField(default=dict, blank=True)
     payment_channel = models.CharField(max_length=16, default="wallet")
     payment_mode = models.CharField(max_length=32, default="Cash")
+    bbps_pipe = models.CharField(max_length=32, blank=True, default="mobikwik")
+    bulk_batch_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    bulk_row_id = models.CharField(max_length=64, blank=True, default="")
     state = models.CharField(max_length=16, default="pending")
     vendor_status = models.CharField(max_length=80, blank=True, default="")
     vendor_txn_id = models.CharField(max_length=80, blank=True, default="")
@@ -240,6 +275,83 @@ class BbpsTransaction(models.Model):
     last_checked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class BulkBbpsBatch(models.Model):
+    """Retailer Excel bulk BBPS job: fetch → verify → wallet auto-pay."""
+
+    batch_id = models.CharField(max_length=64, unique=True)
+    user_id = models.CharField(max_length=320, db_index=True)
+    pipe = models.CharField(max_length=32, default="mobikwik")
+    # Locked when retailer picks a biller before download/upload (one biller per batch).
+    operator_id = models.CharField(max_length=32, blank=True, default="")
+    biller_id = models.CharField(max_length=64, blank=True, default="")
+    biller_name = models.CharField(max_length=120, blank=True, default="")
+    category = models.CharField(max_length=80, blank=True, default="")
+    source_filename = models.CharField(max_length=200, blank=True, default="")
+    status = models.CharField(max_length=24, default="uploaded", db_index=True)
+    row_count = models.PositiveIntegerField(default=0)
+    fetch_ok = models.PositiveIntegerField(default=0)
+    fetch_fail = models.PositiveIntegerField(default=0)
+    pay_ok = models.PositiveIntegerField(default=0)
+    pay_fail = models.PositiveIntegerField(default=0)
+    pay_skipped = models.PositiveIntegerField(default=0)
+    fetch_due_total_paise = models.BigIntegerField(default=0)
+    pay_total_paise = models.BigIntegerField(default=0)
+    paid_paise = models.BigIntegerField(default=0)
+    error_message = models.CharField(max_length=240, blank=True, default="")
+    verified_at = models.DateTimeField(null=True, blank=True)
+    proceed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class BulkBbpsRow(models.Model):
+    """One Excel line inside a BulkBbpsBatch."""
+
+    row_id = models.CharField(max_length=64, unique=True)
+    batch = models.ForeignKey(BulkBbpsBatch, on_delete=models.CASCADE, related_name="rows")
+    row_no = models.PositiveIntegerField()
+    operator_id = models.CharField(max_length=32, blank=True, default="")
+    biller_id = models.CharField(max_length=64, blank=True, default="")
+    biller_name = models.CharField(max_length=120, blank=True, default="")
+    category = models.CharField(max_length=80, blank=True, default="")
+    account = models.CharField(max_length=120, blank=True, default="")
+    account_norm = models.CharField(max_length=120, blank=True, default="")
+    customer_mobile = models.CharField(max_length=20, blank=True, default="")
+    circle = models.CharField(max_length=40, blank=True, default="")
+    ad_params = models.JSONField(default=dict, blank=True)
+    declared_amount_paise = models.BigIntegerField(default=0)
+    fetch_state = models.CharField(max_length=24, default="pending", db_index=True)
+    due_amount_paise = models.BigIntegerField(default=0)
+    bill_date = models.CharField(max_length=40, blank=True, default="")
+    due_date = models.CharField(max_length=40, blank=True, default="")
+    bill_number = models.CharField(max_length=80, blank=True, default="")
+    customer_name = models.CharField(max_length=160, blank=True, default="")
+    fetch_raw = models.JSONField(default=dict, blank=True)
+    fetch_error = models.CharField(max_length=240, blank=True, default="")
+    fetched_at = models.DateTimeField(null=True, blank=True)
+    pay_state = models.CharField(max_length=24, default="blocked", db_index=True)
+    pay_amount_paise = models.BigIntegerField(default=0)
+    bbps_reference = models.CharField(max_length=80, blank=True, default="")
+    pay_error = models.CharField(max_length=240, blank=True, default="")
+    paid_at = models.DateTimeField(null=True, blank=True)
+    parse_error = models.CharField(max_length=240, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["batch", "row_no"], name="uniq_bulk_bbps_batch_row_no"),
+            models.UniqueConstraint(
+                fields=["batch", "operator_id", "account_norm"],
+                name="uniq_bulk_bbps_batch_op_account",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["batch", "fetch_state"]),
+            models.Index(fields=["batch", "pay_state"]),
+        ]
 
 
 class VendorCommissionRate(models.Model):

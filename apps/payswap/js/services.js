@@ -223,7 +223,7 @@
                     <span class="mi" aria-hidden="true">search</span> Fetch Bill
                   </button>
                   <button class="btn bbps-fetch-btn block" type="button" data-bbps-load-plans hidden>
-                    <span class="mi" aria-hidden="true">list_alt</span> Load plans
+                    <span class="mi" aria-hidden="true">list_alt</span> Refresh plans
                   </button>
                   <p class="hint" data-bbps-fetch-note></p>
                 </div>
@@ -346,6 +346,13 @@
         </div>
         <section class="card">
           <div class="panel-head-inline">
+            <h2>PG top-up orders</h2>
+            <span class="hint" data-w-pg-orders-count></span>
+          </div>
+          <div data-w-pg-orders><p class="hint">Loading PG orders…</p></div>
+        </section>
+        <section class="card">
+          <div class="panel-head-inline">
             <h2>Top-up requests</h2>
             <span class="hint" data-w-topups-count></span>
           </div>
@@ -361,6 +368,93 @@
             </div>
           </div>
           <div data-w-ledger><p class="hint">Loading wallet ledger…</p></div>
+        </section>
+      </div>`;
+  }
+
+  function bulkBills() {
+    return `
+      <div class="screen bulk-bills">
+        <header class="page-head page-head-row">
+          <div>
+            <p class="kicker">BBPS · Bulk</p>
+            <h1>Bulk bills</h1>
+            <p>Select one or more billers, set how many bills each, download the sheet, fill only account details, then upload.</p>
+          </div>
+          <div class="page-head-actions">
+            <button type="button" class="btn subtle" data-bulk-template disabled>Download sheet</button>
+            <label class="btn yellow" data-bulk-upload-label>
+              Upload file
+              <input type="file" data-bulk-file accept=".csv,.xlsx,.xlsm,text/csv" hidden />
+            </label>
+          </div>
+        </header>
+        <p class="preview-result bulk-status" data-bulk-status role="status" hidden></p>
+        <section class="card bulk-biller-card">
+          <div class="panel-head-inline">
+            <h2>1. Choose billers &amp; counts</h2>
+            <p class="hint" data-bulk-biller-picked>No billers selected yet.</p>
+          </div>
+          <div class="bulk-biller-toolbar">
+            <label class="field">
+              Category
+              <select data-bulk-category aria-label="BBPS category">
+                <option value="">Loading categories…</option>
+              </select>
+            </label>
+            <label class="field bulk-biller-search">
+              Search biller
+              <input type="search" data-bulk-biller-q placeholder="Name or id" aria-label="Search billers" />
+            </label>
+          </div>
+          <div class="bulk-biller-list" data-bulk-biller-list role="listbox" aria-label="Billers" aria-multiselectable="true">
+            <p class="hint">Pick a category, then tap billers to add them.</p>
+          </div>
+          <div class="bulk-selected" data-bulk-selected hidden>
+            <h3>Selected for sheet</h3>
+            <div data-bulk-selected-rows></div>
+            <p class="hint" data-bulk-selected-total>0 rows will be in the download.</p>
+          </div>
+        </section>
+        <section class="stats" aria-label="Batch summary">
+          <article class="stat"><span>Rows</span><strong data-bulk-stat-rows>0</strong><em data-bulk-stat-file>—</em></article>
+          <article class="stat"><span>Fetch OK</span><strong data-bulk-stat-fetch>0</strong><em data-bulk-stat-fetch-fail>0 failed</em></article>
+          <article class="stat"><span>Due total</span><strong data-bulk-stat-due>₹0.00</strong><em data-bulk-stat-wallet>Wallet —</em></article>
+          <article class="stat"><span>Paid</span><strong data-bulk-stat-paid>0</strong><em data-bulk-stat-status>—</em></article>
+        </section>
+        <section class="card">
+          <div class="panel-head-inline">
+            <h2>2. Batch work surface</h2>
+            <div class="filters" aria-label="Due date filter">
+              <button type="button" class="chip is-on" data-bulk-due="all">All</button>
+              <button type="button" class="chip" data-bulk-due="overdue">Overdue</button>
+              <button type="button" class="chip" data-bulk-due="today">Due today</button>
+              <button type="button" class="chip" data-bulk-due="upcoming">Upcoming</button>
+              <button type="button" class="chip" data-bulk-due="none">No due date</button>
+            </div>
+          </div>
+          <div class="transaction-toolbar">
+            <div class="filters" aria-label="Fetch filter">
+              <button type="button" class="chip is-on" data-bulk-fetch="all">All fetch</button>
+              <button type="button" class="chip" data-bulk-fetch="ok">OK</button>
+              <button type="button" class="chip" data-bulk-fetch="failed">Failed</button>
+              <button type="button" class="chip" data-bulk-fetch="pending">Pending</button>
+            </div>
+            <label class="transaction-search"><span class="mi" aria-hidden="true">search</span><input data-bulk-q type="search" placeholder="Search account, ref" aria-label="Search bulk rows" /></label>
+          </div>
+          <p class="hint" data-bulk-empty>Select billers and counts, download the sheet, fill consumer numbers, then upload.</p>
+          <div class="table-wrap" data-bulk-table hidden></div>
+          <div class="bulk-actions" data-bulk-actions hidden>
+            <button type="button" class="btn subtle" data-bulk-refetch>Re-fetch failed</button>
+            <button type="button" class="btn subtle" data-bulk-export>Export CSV</button>
+            <button type="button" class="btn subtle" data-bulk-cancel>Cancel batch</button>
+            <label class="field bulk-pin-field">Wallet PIN<input data-bulk-pin type="password" inputmode="numeric" maxlength="6" autocomplete="off" /></label>
+            <button type="button" class="btn yellow" data-bulk-proceed>Proceed &amp; pay ready</button>
+          </div>
+        </section>
+        <section class="card">
+          <div class="panel-head-inline"><h2>Recent batches</h2><button type="button" class="btn subtle" data-bulk-refresh>Refresh</button></div>
+          <div data-bulk-batches><p class="hint">Loading…</p></div>
         </section>
       </div>`;
   }
@@ -551,13 +645,14 @@
       </div>`;
   }
 
-  const screens = { home, aeps, dmt, recharge, bills, vouchers, wallet, transactions, profile, support };
+  const screens = { home, aeps, dmt, recharge, bills, "bulk-bills": bulkBills, vouchers, wallet, transactions, profile, support };
   const titles = {
     home: "Home",
     aeps: "AEPS",
     dmt: "DMT",
     recharge: "Recharges",
     bills: "Bill pay",
+    "bulk-bills": "Bulk bills",
     vouchers: "Vouchers",
     wallet: "Float and Ledger",
     transactions: "Transactions",
@@ -570,9 +665,10 @@
     titles,
     esc,
     rupee,
-    mount(root, name, allowedServices) {
+    mount(root, name, allowedServices, entitlements) {
       const viewToService = {
         bills: "bbps",
+        "bulk-bills": "bbps_bulk",
         wallet: "wallet",
         transactions: "transactions",
         profile: "profile",
@@ -584,7 +680,14 @@
       };
       const key = screens[name] ? name : "home";
       const svc = viewToService[key];
-      if (svc && Array.isArray(allowedServices) && !allowedServices.includes(svc)) {
+      if (svc === "bbps_bulk") {
+        const bulkOn = Boolean(entitlements && entitlements.bbps_bulk_enabled);
+        const bbpsOn = Array.isArray(allowedServices) && allowedServices.includes("bbps");
+        if (!bulkOn || !bbpsOn) {
+          root.innerHTML = unavailable(titles[key] || "Bulk bills");
+          return key;
+        }
+      } else if (svc && Array.isArray(allowedServices) && !allowedServices.includes(svc)) {
         root.innerHTML = unavailable(titles[key] || svc);
         return key;
       }

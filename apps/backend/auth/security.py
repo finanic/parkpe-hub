@@ -15,7 +15,10 @@ SCRYPT_N = 2**15
 SCRYPT_R = 8
 SCRYPT_P = 1
 SCRYPT_DKLEN = 32
-ACCESS_TTL = 15 * 60
+# Access cookie for admin, retailer, and customer. A working day, not 15 minutes.
+# One host-only cookie is shared by ParkPe, PaySwap, and the console. The role
+# check on each route is the app boundary. HTTPS origins require Secure in server.py.
+ACCESS_TTL = 24 * 60 * 60
 REFRESH_TTL = 14 * 24 * 60 * 60
 CHALLENGE_TTL = 5 * 60
 MAX_FAILS = 5

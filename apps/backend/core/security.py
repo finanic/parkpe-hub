@@ -62,6 +62,9 @@ def fetch_session(access_token: str, *, base_url: str | None = None) -> dict:
     Does not send the refresh cookie. A 403 with mfa_setup_required stays a 403.
     """
     base = (base_url or os.environ.get("AUTH_BASE_URL") or "http://127.0.0.1:4600").rstrip("/")
+    # Only http(s) may leave this process. file: and other schemes stay blocked.
+    if not (base.startswith("http://") or base.startswith("https://")):
+        raise SessionRejected(401, "Sign in again.")
     request = urllib.request.Request(
         base + AUTH_ME_PATH,
         headers={

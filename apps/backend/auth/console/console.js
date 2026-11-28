@@ -48,8 +48,14 @@
     }
   }
 
-  async function call(path, payload) {
+  function moneyKey() {
+    if (globalThis.crypto && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    return `adj-${Date.now().toString(36)}`;
+  }
+
+  async function call(path, payload, extraHeaders) {
     const headers = { "X-Auth-Request": "1" };
+    if (extraHeaders) Object.assign(headers, extraHeaders);
     const init = { method: "GET", credentials: "same-origin", headers };
     if (payload !== undefined) {
       init.method = "POST";
@@ -100,13 +106,14 @@
   }
 
   const DESK_ROUTE_KEY = "admin-desk-route";
-  const PAYSWAP_VIEWS = new Set(["hub", "policy", "bbps", "retailers", "activity", "commission"]);
+  const PAYSWAP_VIEWS = new Set(["hub", "policy", "bbps", "retailers", "activity", "bulk", "commission"]);
   const ECON_VIEWS = new Set(["hub", "commission", "tds", "gst"]);
   const PAYSWAP_CRUMB = {
     policy: "Retailer policy",
     bbps: "BBPS",
     retailers: "Retailer services",
     activity: "Live activity",
+    bulk: "Bulk bills",
     commission: "Economics",
   };
   const ECON_CRUMB = { commission: "Commission", tds: "TDS", gst: "GST" };
@@ -353,7 +360,7 @@
       }
       if (svcRes.ok && Array.isArray(svcRes.data.services)) {
         svcRes.data.services
-          .filter((s) => ["bbps", "pg", "cashfree"].includes(s.id))
+          .filter((s) => ["bbps", "pg", "payu", "cashfree"].includes(s.id))
           .forEach((s) => {
             items.push({
               icon: "⌁",
@@ -467,6 +474,27 @@
     const mark = deskSuper ? "SA" : "AD";
     document.getElementById("desk-avatar").textContent = mark;
     document.getElementById("top-avatar").textContent = mark;
+  }
+
+  function captureDeskLocation(latInput, lngInput, sourceInput, onError) {
+    if (!latInput || !lngInput || !navigator.geolocation) {
+      if (sourceInput) sourceInput.value = "";
+      onError("Allow location for this desk. Typed coordinates are not accepted.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        latInput.value = Number(pos.coords.latitude).toFixed(6);
+        lngInput.value = Number(pos.coords.longitude).toFixed(6);
+        if (sourceInput) sourceInput.value = "desk";
+        onError("");
+      },
+      () => {
+        if (sourceInput) sourceInput.value = "";
+        onError("Allow location for this desk. Typed coordinates are not accepted.");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   }
 
   function actionButton(label, onClick, className) {
@@ -877,6 +905,12 @@
         ["Name on PAN", kycProfile.pan_name || kycProfile.pan_name_hint || "—"],
         ["PAN registry name", kycProfile.pan_registered_name || "—"],
         ["DigiLocker session", kycProfile.digilocker_verification_id || kycProfile.digilocker_ref || "—"],
+        ["GSTIN", kycProfile.gstin || "—"],
+        ["Udyam", kycProfile.udyam || "—"],
+        ["Business name", kycProfile.business_legal_name || "—"],
+        ["Outlet check", kycProfile.business_status || "—"],
+        ["Desk-captured location", kycProfile.location_source === "desk" && kycProfile.shop_lat && kycProfile.shop_lng ? kycProfile.shop_lat + ", " + kycProfile.shop_lng : "—"],
+        ["Desk IP", kycProfile.verification_ip || "—"],
         ["Recorded", kycProfile.recorded_at ? new Date(kycProfile.recorded_at * 1000).toLocaleString() : "—"],
       ];
       rows.forEach(([label, value]) => {
@@ -985,6 +1019,10 @@
           <label>Reason<input type="text" data-ret-adj-reason placeholder="Settlement / adjustment" /></label>
           <button type="button" class="btn-xs primary" data-ret-adj-go>Apply CR/DR</button>
         </div>
+        ${(Array.isArray(payload.pending_adjustments) ? payload.pending_adjustments : []).map((row) => `<div class="note">₹${escHtml(row.amount)} ${escHtml(row.direction)} is waiting for a second admin. Requested by ${escHtml(row.requested_by)}.
+          <button type="button" class="btn-xs primary" data-adj-review="approve" data-adjustment-id="${escHtml(row.adjustment_id)}">Approve</button>
+          <button type="button" class="btn-xs" data-adj-review="reject" data-adjustment-id="${escHtml(row.adjustment_id)}">Reject</button>
+        </div>`).join("")}
         <div>
           <strong style="font-size:12px;display:block;margin-bottom:6px">Assigned services (overrides default policy)</strong>
           <div class="retailer-service-grid">${svcRows}</div>
@@ -1013,6 +1051,21 @@
       renderRetailerControls(email, ref.ok ? ref.data : null);
     });
 
+    host.querySelectorAll("[data-adj-review]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        const res = await call("/api/auth/desk/wallets/adjust-review", {
+          adjustment_id: button.dataset.adjustmentId,
+          decision: button.dataset.adjReview,
+        });
+        button.disabled = false;
+        if (!res.ok) return notify(res.data.error || "Could not review the adjustment.");
+        notify(button.dataset.adjReview === "approve" ? "Adjustment applied." : "Adjustment rejected.");
+        const ref = await call("/api/auth/desk/wallets?email=" + encodeURIComponent(email));
+        renderRetailerControls(email, ref.ok ? ref.data : null);
+      });
+    });
+
     host.querySelector("[data-ret-reset-pin]")?.addEventListener("click", async () => {
       const res = await call("/api/auth/desk/wallets/controls", { email, reset_pin: true });
       if (!res.ok) return notify(res.data.error || "Could not reset PIN.");
@@ -1025,8 +1078,16 @@
       const direction = host.querySelector("[data-ret-adj-dir]")?.value || "CR";
       const amount = host.querySelector("[data-ret-adj-amt]")?.value || "";
       const reason = host.querySelector("[data-ret-adj-reason]")?.value || "";
-      const res = await call("/api/auth/desk/wallets/adjust", { email, direction, amount, reason });
+      const button = host.querySelector("[data-ret-adj-go]");
+      if (button) button.disabled = true;
+      const res = await call(
+        "/api/auth/desk/wallets/adjust",
+        { email, direction, amount, reason },
+        { "Idempotency-Key": moneyKey() },
+      );
+      if (button) button.disabled = false;
       if (!res.ok) return notify(res.data.error || "Adjustment failed.");
+      if (res.data.pending) return notify(`₹${amount} ${direction} is waiting for a second admin.`);
       notify(`Wallet ${direction} ₹${amount} applied.`);
       const ref = await call("/api/auth/desk/wallets?email=" + encodeURIComponent(email));
       renderRetailerControls(email, ref.ok ? ref.data : null);
@@ -1478,6 +1539,20 @@
       actions.append(
         actionButton("View profile", () => openVerifyProfile(row), "primary btn-sm")
       );
+      if (row.business_status === "pending_review") {
+        actions.append(actionButton("Approve outlet", async () => {
+          const reviewed = await call("/api/auth/desk/business-review", {
+            email: row.email,
+            decision: "approve",
+          });
+          if (!reviewed.ok) {
+            notify(reviewed.data.error || "Could not approve the outlet.");
+            return;
+          }
+          notify(row.email + " can sign in.");
+          loadVerifications();
+        }, "btn-sm"));
+      }
       item.append(record, actions);
       list.appendChild(item);
     });
@@ -1589,7 +1664,8 @@
     if (!row.email_ok || !row.mobile_ok) return "codes";
     if (row.role !== "retailer") return "codes";
     if (!row.aadhaar_ok) return row.aadhaar_pending ? "aadhaar-done" : "aadhaar";
-    return "pan";
+    if (!row.pan_ok) return "pan";
+    return "business";
   }
 
   function resumeField(name) {
@@ -1611,6 +1687,7 @@
           { key: "contact", label: "Email and SMS", done: row.email_ok && row.mobile_ok },
           { key: "aadhaar", label: "DigiLocker", done: row.aadhaar_ok },
           { key: "pan", label: "PAN", done: row.pan_ok },
+          { key: "business", label: "GST and Udyam", done: false },
         ]
       : [{ key: "contact", label: "Email and SMS", done: row.email_ok && row.mobile_ok }];
     steps.forEach((step, index) => {
@@ -1630,13 +1707,15 @@
       codes: "Verify email and mobile",
       aadhaar: "Open DigiLocker",
       "aadhaar-done": "Continue to PAN",
-      pan: "Check PAN and create account",
+      pan: "Check PAN",
+      business: "Verify GST and Udyam",
     };
     const hints = {
       codes: "Enter both codes sent when this signup started. Use Resend on the queue if they expired.",
       aadhaar: "Opens DigiLocker. Email, mobile, and password stay as they were.",
       "aadhaar-done": "After DigiLocker shows success, this desk checks Cashfree every few seconds. You can also press Continue.",
-      pan: "PAN is the last step before the retailer account opens.",
+      pan: "PAN is checked against the registry. The account stays closed until GST and Udyam match.",
+      business: "Stand at the outlet. Cashfree must show an active GSTIN and a live Udyam for the same business.",
     };
     resumeForm.querySelector("[data-resume-submit]").textContent = labels[step] || "Continue";
     resumeForm.querySelector("[data-resume-hint]").textContent = hints[step] || "";
@@ -1660,6 +1739,11 @@
     const needPan = step === "pan";
     resumeField("pan").required = needPan;
     resumeField("pan_name").required = needPan;
+    const needBusiness = step === "business";
+    ["gstin", "udyam", "outlet_name", "lat", "lng"].forEach((name) => {
+      const input = resumeField(name);
+      if (input) input.required = needBusiness;
+    });
   }
 
   function closeResume() {
@@ -1757,21 +1841,49 @@
       showResumeStep("pan");
       return;
     }
-    const created = await call("/api/auth/signup/pan", {
-      signup_id: resumeSignup,
-      pan: resumeField("pan").value,
-      name: resumeField("pan_name").value,
-    });
-    if (!created.ok || !created.data.account_ready) {
-      return resumeError(created.data.error || "Verification did not succeed.");
+    if (resumeStep === "pan") {
+      const checked = await call("/api/auth/signup/pan", {
+        signup_id: resumeSignup,
+        pan: resumeField("pan").value,
+        name: resumeField("pan_name").value,
+      });
+      if (!checked.ok || !checked.data.business_required) {
+        return resumeError(checked.data.error || "Verification did not succeed.");
+      }
+      resumeRow = Object.assign({}, resumeRow, { pan_ok: true });
+      paintResumeProgress(resumeRow);
+      showResumeStep("business");
+      return;
     }
+    if (resumeField("location_source").value !== "desk") {
+      return resumeError("Capture this desk's location before continuing.");
+    }
+    const opened = await call("/api/auth/signup/business", {
+      signup_id: resumeSignup,
+      gstin: resumeField("gstin").value,
+      udyam: resumeField("udyam").value,
+      outlet_name: resumeField("outlet_name").value,
+      lat: resumeField("lat").value,
+      lng: resumeField("lng").value,
+      location_source: "desk",
+    });
+    if (!opened.ok || !opened.data.account_ready) {
+      return resumeError(opened.data.error || "Business verification did not succeed.");
+    }
+    notify("Outlet is waiting for approval. Sign-in stays closed until you approve it.");
     return finishResumeSignup(resumeRow.email, "retailer");
+  });
+
+  document.querySelector("[data-resume-locate]")?.addEventListener("click", () => {
+    captureDeskLocation(resumeField("lat"), resumeField("lng"), resumeField("location_source"), resumeError);
   });
 
   const SERVICE_ICONS = {
     kaleyra: "✉",
     email: "@",
     cashfree: "◇",
+    payu: "₹",
+    pg: "⌁",
     hub_api: "⌘",
     bbps: "₹",
     parking: "P",
@@ -1951,21 +2063,41 @@
     const boxes = policyForm.querySelector("[data-default-services-boxes]");
     if (boxes) {
       boxes.replaceChildren();
-      catalog.forEach((svc) => {
-        const lbl = document.createElement("label");
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.name = "svc";
-        cb.value = svc.key;
-        cb.checked = enabled.has(svc.key);
-        lbl.append(cb, document.createTextNode(" " + svc.label));
-        boxes.appendChild(lbl);
-      });
+      if (!catalog.length) {
+        boxes.innerHTML = `<p class="note empty-state">No counter services in the catalogue yet.</p>`;
+      } else {
+        catalog.forEach((svc) => {
+          const lbl = document.createElement("label");
+          lbl.className = "policy-check-tile";
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.name = "svc";
+          cb.value = svc.key;
+          cb.checked = enabled.has(svc.key);
+          const copy = document.createElement("span");
+          copy.className = "policy-check-copy";
+          const title = document.createElement("strong");
+          title.textContent = svc.label || svc.key;
+          const sub = document.createElement("small");
+          sub.textContent = svc.key;
+          copy.append(title, sub);
+          lbl.append(cb, copy);
+          boxes.appendChild(lbl);
+        });
+      }
     }
-    ["allow_wallet_pay", "allow_pg_pay", "allow_pg_topup"].forEach((k) => {
+    ["allow_wallet_pay", "allow_pg_pay", "allow_pg_topup", "bbps_bulk_enabled"].forEach((k) => {
       const el = policyForm.elements[k];
       if (el) el.checked = Boolean(p[k]);
     });
+    if (policyForm.elements.pg_provider) {
+      const mode = String(p.pg_provider || "both").toLowerCase();
+      policyForm.elements.pg_provider.value = ["cashfree", "payu", "both"].includes(mode) ? mode : "both";
+    }
+    if (policyForm.elements.bbps_pipe) {
+      const pipe = String(p.bbps_pipe || "mobikwik").toLowerCase();
+      policyForm.elements.bbps_pipe.value = ["mobikwik", "pipe_b"].includes(pipe) ? pipe : "mobikwik";
+    }
     const limMap = {
       default_per_txn_limit: p.default_per_txn_limit_paise,
       default_daily_debit_limit: p.default_daily_debit_limit_paise,
@@ -1977,6 +2109,151 @@
     });
   }
 
+  function paintBbpsCatStats(p) {
+    const catalog = p?.bbps_catalog || [];
+    const enabled = new Set(p?.enabled_bbps_categories || []);
+    const allOn = Boolean(p?.bbps_categories_unrestricted);
+    const enabledCount = allOn ? catalog.length : catalog.filter((cat) => enabled.has(cat.id)).length;
+    const setText = (sel, txt) => {
+      const el = document.querySelector(sel);
+      if (el) el.textContent = txt;
+    };
+    setText("[data-bbps-cat-enabled]", String(enabledCount));
+    setText("[data-bbps-cat-enabled-note]", allOn ? "All categories on" : `${enabledCount} of ${catalog.length} selected`);
+    setText("[data-bbps-cat-total]", String(catalog.length));
+    setText("[data-bbps-cat-total-note]", catalog.length ? "From Mobikwik sheet" : "Import sheet in Economics");
+    setText("[data-bbps-cat-mode]", allOn ? "Show all" : "Curated");
+  }
+
+  let bbpsOpenCategory = "";
+
+  function filterBbpsCatTiles() {
+    const boxes = document.querySelector("[data-default-bbps-cats]");
+    const q = String(document.querySelector("[data-bbps-cat-search]")?.value || "").trim().toLowerCase();
+    const note = document.querySelector("[data-bbps-cat-filter-note]");
+    if (!boxes) return;
+    let visible = 0;
+    boxes.querySelectorAll("[data-bbps-cat-card]").forEach((tile) => {
+      const hay = String(tile.dataset.search || "").toLowerCase();
+      const show = !q || hay.includes(q);
+      tile.hidden = !show;
+      if (show) visible += 1;
+    });
+    if (note) {
+      note.textContent = q
+        ? `${visible} categor${visible === 1 ? "y" : "ies"} match “${q}”.`
+        : "Open a category to curate billers. Save categories applies the outer ticks.";
+    }
+  }
+
+  function filterBbpsBillerTiles(panel) {
+    if (!panel) return;
+    const q = String(panel.querySelector("[data-bbps-biller-search]")?.value || "").trim().toLowerCase();
+    let visible = 0;
+    panel.querySelectorAll("[data-bbps-biller-tile]").forEach((tile) => {
+      const hay = String(tile.dataset.search || "").toLowerCase();
+      const show = !q || hay.includes(q);
+      tile.hidden = !show;
+      if (show) visible += 1;
+    });
+    const note = panel.querySelector("[data-bbps-biller-note]");
+    if (note && q) note.textContent = `${visible} biller${visible === 1 ? "" : "s"} match the search.`;
+  }
+
+  function paintBbpsBillerPanel(panel, payload) {
+    if (!panel || !payload) return;
+    const list = panel.querySelector("[data-bbps-biller-list]");
+    const allToggle = panel.querySelector("[data-bbps-biller-all]");
+    const note = panel.querySelector("[data-bbps-biller-note]");
+    if (!list) return;
+    const billers = payload.billers || [];
+    const unrestricted = Boolean(payload.unrestricted);
+    if (allToggle) allToggle.checked = unrestricted;
+    list.replaceChildren();
+    if (!billers.length) {
+      list.innerHTML = `<p class="note empty-state">No billers in this category.</p>`;
+    } else {
+      billers.forEach((b) => {
+        const lbl = document.createElement("label");
+        lbl.className = "policy-check-tile";
+        lbl.dataset.bbpsBillerTile = "";
+        lbl.dataset.search = `${b.name || ""} ${b.biller_id || ""} ${b.op || ""}`;
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.name = "bbps_biller";
+        cb.value = b.biller_id;
+        cb.checked = Boolean(b.allowed);
+        cb.disabled = unrestricted;
+        const copy = document.createElement("span");
+        copy.className = "policy-check-copy";
+        const title = document.createElement("strong");
+        title.textContent = b.name || b.biller_id;
+        const sub = document.createElement("small");
+        sub.textContent = `${b.biller_id}${b.op ? " · op " + b.op : ""}`;
+        copy.append(title, sub);
+        lbl.append(cb, copy);
+        list.appendChild(lbl);
+      });
+    }
+    list.classList.toggle("is-dimmed", unrestricted);
+    if (note) {
+      note.textContent = unrestricted
+        ? "All billers in this category are allowed."
+        : `${payload.allowed_count || 0} of ${payload.total || billers.length} billers allowed.`;
+    }
+    filterBbpsBillerTiles(panel);
+  }
+
+  async function openBbpsCategoryBillers(catId) {
+    const card = document.querySelector(`[data-bbps-cat-card="${CSS.escape(catId)}"]`);
+    if (!card) return;
+    document.querySelectorAll("[data-bbps-cat-panel]").forEach((panel) => {
+      const parent = panel.closest("[data-bbps-cat-card]");
+      if (parent && parent !== card) {
+        panel.hidden = true;
+        parent.querySelector("[data-bbps-cat-open]")?.classList.remove("is-on");
+      }
+    });
+    const panel = card.querySelector("[data-bbps-cat-panel]");
+    const openBtn = card.querySelector("[data-bbps-cat-open]");
+    if (!panel) return;
+    const willOpen = panel.hidden;
+    panel.hidden = !willOpen;
+    openBtn?.classList.toggle("is-on", willOpen);
+    bbpsOpenCategory = willOpen ? catId : "";
+    if (!willOpen) return;
+    const list = panel.querySelector("[data-bbps-biller-list]");
+    if (list) list.innerHTML = `<p class="note">Loading billers…</p>`;
+    const res = await call(
+      "/api/auth/desk/entitlements/default/bbps-billers?category=" + encodeURIComponent(catId) + "&limit=500",
+    );
+    if (!res.ok) {
+      if (list) list.innerHTML = `<p class="note empty-state">${escHtml(res.data.error || "Could not load billers.")}</p>`;
+      return;
+    }
+    paintBbpsBillerPanel(panel, res.data);
+  }
+
+  async function saveBbpsCategoryBillers(catId) {
+    const card = document.querySelector(`[data-bbps-cat-card="${CSS.escape(catId)}"]`);
+    const panel = card?.querySelector("[data-bbps-cat-panel]");
+    if (!panel) return;
+    const allOn = Boolean(panel.querySelector("[data-bbps-biller-all]")?.checked);
+    const ids = allOn
+      ? null
+      : Array.from(panel.querySelectorAll('input[name="bbps_biller"]:checked')).map((el) => el.value);
+    if (!allOn && !(ids || []).length) {
+      return notify("Pick at least one biller, or turn on All billers in this category.");
+    }
+    const body = { bbps_biller_allowlist: { [catId]: ids } };
+    const res = await call("/api/auth/desk/entitlements/default", body);
+    if (!res.ok) return notify(res.data.error || "Could not save billers.");
+    payswapPolicyCache = res.data;
+    bbpsOpenCategory = catId;
+    fillDefaultBbpsCats(res.data);
+    notify(allOn ? `All ${catId} billers allowed.` : `${catId}: ${ids.length} billers allowed.`);
+  }
+
   function fillDefaultBbpsCats(p) {
     const boxes = document.querySelector("[data-default-bbps-cats]");
     const unrestricted = document.querySelector("[data-bbps-unrestricted]");
@@ -1984,20 +2261,80 @@
     const catalog = p.bbps_catalog || [];
     const enabled = new Set(p.enabled_bbps_categories || []);
     const allOn = Boolean(p.bbps_categories_unrestricted);
+    const openId = bbpsOpenCategory;
     if (unrestricted) unrestricted.checked = allOn;
     boxes.replaceChildren();
-    catalog.forEach((cat) => {
-      const lbl = document.createElement("label");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.name = "bbps_cat";
-      cb.value = cat.id;
-      cb.checked = allOn || enabled.has(cat.id);
-      cb.disabled = allOn;
-      lbl.append(cb, document.createTextNode(` ${cat.label} (${Number(cat.count || 0).toLocaleString("en-IN")})`));
-      boxes.appendChild(lbl);
-    });
-    boxes.classList.toggle("is-dimmed", allOn);
+    if (!catalog.length) {
+      boxes.innerHTML = `<div class="empty-state reports-empty"><strong>No BBPS categories loaded</strong><p>Import the Mobikwik B2B sheet from Economics, then return here.</p></div>`;
+    } else {
+      catalog.forEach((cat) => {
+        const card = document.createElement("article");
+        card.className = "bbps-cat-card";
+        card.dataset.bbpsCatCard = cat.id;
+        card.dataset.search = `${cat.label || ""} ${cat.id || ""}`;
+        const total = Number(cat.count || 0);
+        const restricted = Boolean(cat.biller_restricted);
+        const allowedBillers = restricted ? Number(cat.allowed_billers || 0) : total;
+        const billerNote = restricted
+          ? `${allowedBillers.toLocaleString("en-IN")} of ${total.toLocaleString("en-IN")} billers allowed`
+          : `${total.toLocaleString("en-IN")} billers · all allowed`;
+        card.innerHTML = `
+          <div class="bbps-cat-card-head">
+            <label class="policy-check-tile bbps-cat-toggle">
+              <input type="checkbox" name="bbps_cat" value="${escHtml(cat.id)}" ${allOn || enabled.has(cat.id) ? "checked" : ""} ${allOn ? "disabled" : ""} />
+              <span class="policy-check-copy"><strong>${escHtml(cat.label || cat.id)}</strong><small>${escHtml(billerNote)}</small></span>
+            </label>
+            <button class="select" type="button" data-bbps-cat-open="${escHtml(cat.id)}">Billers</button>
+          </div>
+          <div class="bbps-cat-panel" data-bbps-cat-panel hidden>
+            <div class="bbps-biller-toolbar">
+              <label class="payswap-inline-check"><input type="checkbox" data-bbps-biller-all /> All billers in this category</label>
+              <label class="bbps-cat-search">Search billers
+                <input type="search" data-bbps-biller-search placeholder="Name or biller id…" autocomplete="off" />
+              </label>
+              <button class="primary" type="button" data-bbps-biller-save="${escHtml(cat.id)}">Save billers</button>
+            </div>
+            <p class="note bbps-biller-note" data-bbps-biller-note></p>
+            <div class="policy-checks policy-checks-bbps" data-bbps-biller-list></div>
+          </div>`;
+        boxes.appendChild(card);
+      });
+      boxes.querySelectorAll("[data-bbps-cat-open]").forEach((btn) => {
+        btn.addEventListener("click", () => openBbpsCategoryBillers(btn.dataset.bbpsCatOpen || ""));
+      });
+      boxes.querySelectorAll("[data-bbps-biller-save]").forEach((btn) => {
+        btn.addEventListener("click", () => saveBbpsCategoryBillers(btn.dataset.bbpsBillerSave || ""));
+      });
+      boxes.querySelectorAll("[data-bbps-biller-all]").forEach((toggle) => {
+        toggle.addEventListener("change", () => {
+          const panel = toggle.closest("[data-bbps-cat-panel]");
+          const on = Boolean(toggle.checked);
+          panel?.querySelectorAll('input[name="bbps_biller"]').forEach((cb) => {
+            cb.disabled = on;
+            if (on) cb.checked = true;
+          });
+          panel?.querySelector("[data-bbps-biller-list]")?.classList.toggle("is-dimmed", on);
+          const note = panel?.querySelector("[data-bbps-biller-note]");
+          if (note) {
+            note.textContent = on
+              ? "All billers in this category are allowed."
+              : "Curate the billers below, then save.";
+          }
+        });
+      });
+      boxes.querySelectorAll("[data-bbps-biller-search]").forEach((input) => {
+        input.addEventListener("input", () => filterBbpsBillerTiles(input.closest("[data-bbps-cat-panel]")));
+      });
+    }
+    boxes.classList.toggle("is-dimmed", false);
+    boxes.querySelectorAll(".bbps-cat-toggle").forEach((el) => el.classList.toggle("is-dimmed", allOn));
+    paintBbpsCatStats(p);
+    filterBbpsCatTiles();
+    if (openId && catalog.some((c) => c.id === openId)) {
+      openBbpsCategoryBillers(openId);
+    } else {
+      bbpsOpenCategory = "";
+    }
   }
 
   function fillRetailerSvcSelect() {
@@ -2111,7 +2448,7 @@
     const host = document.querySelector("[data-retailer-svc-panel]");
     if (!host) return;
     if (!email) {
-      host.innerHTML = `<div class="commission-empty"><strong>Select a retailer</strong><p>Load an account (R00…) to open that retailer’s BBPS, AEPS, and other commission sheets.</p></div>`;
+      host.innerHTML = `<div class="commission-empty"><strong>No retailer loaded</strong><p>Choose a retailer account above to open counter access and the commission sheet.</p></div>`;
       return;
     }
     host.innerHTML = `<div class="commission-empty"><strong>Loading account…</strong><p>${escHtml(email)}</p></div>`;
@@ -2149,26 +2486,27 @@
       })
       .join("");
 
-    const svcRows = svcCatalog
-      .map((s) => {
-        const isOverridden = Object.prototype.hasOwnProperty.call(svcOverrides, s.key);
-        const curVal = isOverridden ? (svcOverrides[s.key] ? "on" : "off") : "default";
-        const effLabel = enabledSvcs.has(s.key) ? "ON" : "OFF";
-        return `<div class="retailer-svc-row">
-          <span><strong>${escHtml(s.label)}</strong> <small>(${effLabel})</small></span>
+    const productKeys = { bbps: 1, recharge: 1, vouchers: 1, dmt: 1, aeps: 1 };
+    const svcRow = (s) => {
+      const isOverridden = Object.prototype.hasOwnProperty.call(svcOverrides, s.key);
+      const curVal = isOverridden ? (svcOverrides[s.key] ? "on" : "off") : "default";
+      const effLabel = enabledSvcs.has(s.key) ? "ON" : "OFF";
+      return `<div class="retailer-svc-row">
+          <span><strong>${escHtml(s.label)}</strong> <small>${effLabel}</small></span>
           <select data-svc-key="${escHtml(s.key)}">
             <option value="default" ${curVal === "default" ? "selected" : ""}>Default</option>
             <option value="on" ${curVal === "on" ? "selected" : ""}>Allow</option>
             <option value="off" ${curVal === "off" ? "selected" : ""}>Block</option>
           </select>
         </div>`;
-      })
-      .join("");
+    };
+    const productRows = svcCatalog.filter((s) => productKeys[s.key]).map(svcRow).join("");
+    const deskRows = svcCatalog.filter((s) => !productKeys[s.key]).map(svcRow).join("");
 
     const modeSelect = (key, label, currentVal) => {
       const ovVal = payOverrides[key];
       const ov = ovVal === true ? "on" : ovVal === false ? "off" : "default";
-      return `<label>${escHtml(label)} (${currentVal ? "ON" : "OFF"})
+      return `<label>${escHtml(label)} <small>${currentVal ? "ON" : "OFF"}</small>
         <select data-mode-key="${escHtml(key)}">
           <option value="default" ${ov === "default" ? "selected" : ""}>Default</option>
           <option value="on" ${ov === "on" ? "selected" : ""}>Allow</option>
@@ -2178,6 +2516,8 @@
     };
 
     const retailerId = accountIdForEmail(email, "retailer") || "—";
+    const walletStatus = String(w.status || "—");
+    const walletStatusClass = walletStatus.toLowerCase() === "active" ? "" : walletStatus.toLowerCase() === "blocked" ? "down" : "warn";
     const sheetTabs = [
       ["bbps", "BBPS"],
       ["recharge", "Recharge"],
@@ -2192,69 +2532,88 @@
       .join("");
 
     host.innerHTML = `
-      <section class="card room-card">
-        <div class="panel-head">
-          <div>
-            <h2>Account</h2>
-            <p>Loaded retailer identity and wallet state.</p>
+      <section class="card room-card retailer-identity-card">
+        <div class="room-body retailer-identity">
+          <div class="retailer-identity-main">
+            <strong>${escHtml(email)}</strong>
+            <span class="mono">${escHtml(retailerId)}</span>
+            <span class="status ${walletStatusClass}">${escHtml(walletStatus)}</span>
           </div>
-          <div class="room-actions"><button type="button" class="select" data-jump="people">Open in Account Hub</button></div>
-        </div>
-        <div class="room-body">
-          <div class="retailer-identity">
-            <div>
-              <strong>${escHtml(email)}</strong>
-              <span class="mono">${escHtml(retailerId)}</span>
-              <p>Wallet ${inr(w.available || 0)} · Status ${escHtml(w.status || "—")}. Blocked services leave this retailer’s nav, home tiles, and API on the next refresh.</p>
-            </div>
+          <div class="retailer-identity-meta">
+            <span>Wallet <strong>${inr(w.available || 0)}</strong></span>
+            <button type="button" class="select" data-jump="people">Account Hub</button>
           </div>
         </div>
       </section>
 
-      <section class="card room-card">
+      <section class="card room-card retailer-access-card">
         <div class="panel-head">
           <div>
             <h2>Counter access</h2>
-            <p>Services and payment rails for ${escHtml(retailerId)}.</p>
+            <p>Products, payment rails, and BBPS categories for ${escHtml(retailerId)}.</p>
+          </div>
+          <div class="room-actions">
+            <button type="button" class="primary" data-retailer-svc-save>Save counter</button>
           </div>
         </div>
-        <div class="room-body retailer-access-grid">
-          <div class="retailer-block">
-            <h3>Counter services</h3>
-            <p class="note">What appears on this retailer’s PaySwap counter.</p>
-            <div class="retailer-service-grid">${svcRows}</div>
+        <div class="room-body">
+          <div class="segments retailer-access-tabs" role="tablist" aria-label="Counter access">
+            <button type="button" class="is-on" data-retailer-access-tab="products" aria-selected="true">Products</button>
+            <button type="button" data-retailer-access-tab="rails" aria-selected="false">Payment rails</button>
+            <button type="button" data-retailer-access-tab="bbps" aria-selected="false">BBPS categories</button>
           </div>
-          <div class="retailer-block">
-            <h3>Payment rails</h3>
+          <div class="retailer-access-pane is-active" data-retailer-access-pane="products">
+            <p class="note">Counter products this retailer can open.</p>
+            <div class="retailer-service-grid">${productRows}</div>
+            <p class="note retailer-access-subhead">Bulk bills (Excel)</p>
+            <div class="policy-limits retailer-rail-limits">
+              <label>Bulk bills
+                <select data-bbps-bulk ${bbpsOn ? "" : "disabled"}>
+                  <option value="default" ${ent.bbps_bulk_override == null ? "selected" : ""}>Default (${ent.bbps_bulk_enabled ? "on" : "off"})</option>
+                  <option value="on" ${ent.bbps_bulk_override === true ? "selected" : ""}>Allow</option>
+                  <option value="off" ${ent.bbps_bulk_override === false ? "selected" : ""}>Block</option>
+                </select>
+              </label>
+              <label>BBPS pipe
+                <select data-bbps-pipe ${bbpsOn ? "" : "disabled"}>
+                  <option value="default" ${!ent.bbps_pipe_override ? "selected" : ""}>Default (${escHtml(ent.bbps_pipe || "mobikwik")})</option>
+                  <option value="mobikwik" ${ent.bbps_pipe_override === "mobikwik" ? "selected" : ""}>Mobikwik</option>
+                  <option value="pipe_b" ${ent.bbps_pipe_override === "pipe_b" ? "selected" : ""}>Pipe B</option>
+                </select>
+              </label>
+            </div>
+            <p class="hint">${bbpsOn
+              ? `Effective now: Bulk bills ${ent.bbps_bulk_enabled ? "ON" : "OFF"} · pipe ${escHtml(ent.bbps_pipe || "mobikwik")}. Save counter after changing.`
+              : "Turn Bill Pay (BBPS) to Allow before Bulk bills can show on the counter."}</p>
+            <p class="note retailer-access-subhead">Always on the desk</p>
+            <div class="retailer-service-grid retailer-service-grid-quiet">${deskRows}</div>
+          </div>
+          <div class="retailer-access-pane" data-retailer-access-pane="rails" hidden>
             <p class="note">Wallet and PG permissions for this account.</p>
-            <div class="policy-limits">
+            <div class="policy-limits retailer-rail-limits">
               ${modeSelect("allow_wallet_pay", "Wallet Pay", modes.wallet_pay)}
               ${modeSelect("allow_pg_pay", "Direct PG Pay", modes.pg_pay)}
               ${modeSelect("allow_pg_topup", "PG Wallet Top-up", modes.pg_topup)}
             </div>
           </div>
-        </div>
-        <div class="room-body retailer-block">
-          <h3>BBPS categories</h3>
-          <p class="note">${bbpsOn
-            ? "Which bill categories this retailer can open. Default inherits BBPS management."
-            : "Bill Pay (BBPS) is blocked for this retailer — category overrides apply only after BBPS is Allow or Default-on."}</p>
-          <div class="retailer-service-grid ${bbpsOn ? "" : "is-dimmed"}">${catRows || `<p class="note">No BBPS categories in catalogue.</p>`}</div>
-        </div>
-        <div class="room-body retailer-block-actions">
-          <button type="button" class="primary" data-retailer-svc-save>Save retailer counter</button>
+          <div class="retailer-access-pane" data-retailer-access-pane="bbps" hidden>
+            <p class="note">${bbpsOn
+              ? "Bill categories this retailer can open. Default inherits BBPS management."
+              : "Bill Pay is blocked — category overrides apply only after BBPS is Allow or Default-on."}</p>
+            <div class="retailer-service-grid ${bbpsOn ? "" : "is-dimmed"}">${catRows || `<p class="note">No BBPS categories in catalogue.</p>`}</div>
+          </div>
         </div>
       </section>
 
-      <section class="card room-card">
+      <section class="card room-card retailer-commission-card">
         <div class="panel-head retailer-sheet-head">
           <div>
             <h2>Commission sheet</h2>
-            <p>Set what ${escHtml(retailerId)} earns on each row. BBPS uses the BBPS sheet. AEPS uses the AEPS sheet. A blank row keeps the Economics split.</p>
+            <p>What ${escHtml(retailerId)} earns per row. Blank inherits Economics.</p>
           </div>
           <div class="room-actions">
             <div class="segments" data-retailer-sheet-tabs aria-label="Commission sheet">${sheetTabs}</div>
-            <button type="button" class="select" data-payswap-open="commission" data-econ-target="commission">Open Economics</button>
+            <button type="button" class="select" data-payswap-open="commission" data-econ-target="commission">Economics default</button>
           </div>
         </div>
         <div class="room-body commission-catalogue-toolbar">
@@ -2269,6 +2628,21 @@
       </section>`;
 
     retailerSheetEmail = email;
+    host.querySelectorAll("[data-retailer-access-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.retailerAccessTab || "products";
+        host.querySelectorAll("[data-retailer-access-tab]").forEach((node) => {
+          const on = node === btn;
+          node.classList.toggle("is-on", on);
+          node.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        host.querySelectorAll("[data-retailer-access-pane]").forEach((pane) => {
+          const on = pane.dataset.retailerAccessPane === tab;
+          pane.classList.toggle("is-active", on);
+          pane.hidden = !on;
+        });
+      });
+    });
     host.querySelectorAll("[data-retailer-sheet-service]").forEach((btn) => {
       btn.addEventListener("click", () => {
         retailerSheetService = btn.dataset.retailerSheetService || "bbps";
@@ -2324,6 +2698,14 @@
         else if (sel.value === "off") body[sel.dataset.modeKey] = false;
         else body[sel.dataset.modeKey] = null;
       });
+      const pipeSel = host.querySelector("[data-bbps-pipe]");
+      if (pipeSel) body.bbps_pipe = pipeSel.value === "default" ? null : pipeSel.value;
+      const bulkSel = host.querySelector("[data-bbps-bulk]");
+      if (bulkSel) {
+        if (bulkSel.value === "on") body.bbps_bulk_enabled = true;
+        else if (bulkSel.value === "off") body.bbps_bulk_enabled = false;
+        else body.bbps_bulk_enabled = null;
+      }
       const res = await call("/api/auth/desk/entitlements/retailer", body);
       if (!res.ok) return notify(res.data.error || "Could not save retailer dashboard.");
       notify("Retailer dashboard saved — blocked services are gone from their counter.");
@@ -2406,10 +2788,64 @@
     }
     fillRetailerSvcSelect();
     if (payswapView === "activity") await loadPayswapActivity();
+    if (payswapView === "bulk") await loadBulkDesk();
     if (payswapView === "retailers") {
       const sel = document.querySelector("[data-retailer-svc-select]");
       if (sel && sel.value) await loadRetailerSvcPanel(sel.value);
     }
+  }
+
+  async function loadBulkDesk() {
+    const q = (document.querySelector("[data-bulk-desk-q]")?.value || "").trim();
+    const qs = q ? `?q=${encodeURIComponent(q)}&limit=50` : "?limit=50";
+    const res = await call("/api/auth/desk/bbps/bulk" + qs);
+    const wrap = document.querySelector("[data-bulk-desk-table]");
+    if (!wrap) return;
+    if (!res.ok) {
+      wrap.innerHTML = `<p class="note">${escHtml(res.data.error || "Could not load bulk batches.")}</p>`;
+      return;
+    }
+    const batches = res.data.batches || [];
+    setText("[data-bulk-desk-count]", String(batches.length));
+    const paid = batches.reduce((sum, b) => sum + Number(b.paid_total || 0), 0);
+    const payOk = batches.reduce((sum, b) => sum + Number(b.pay_ok || 0), 0);
+    const fetchFail = batches.reduce((sum, b) => sum + Number(b.fetch_fail || 0), 0);
+    setText("[data-bulk-desk-paid]", inr(paid));
+    setText("[data-bulk-desk-payok]", `${payOk} pay ok`);
+    setText("[data-bulk-desk-fetchfail]", String(fetchFail));
+    setText("[data-bulk-desk-meta]", batches.length ? "Recent uploads" : "No batches yet");
+    if (!batches.length) {
+      wrap.innerHTML = `<p class="note">No bulk BBPS batches yet.</p>`;
+      return;
+    }
+    wrap.innerHTML = `<table class="desk-table"><thead><tr>
+      <th>Batch / Retailer</th><th>File</th><th>Pipe</th><th>Status</th><th class="num">Rows</th><th class="num">Fetch</th><th class="num">Paid</th><th></th>
+    </tr></thead><tbody>${batches
+      .map((b) => {
+        const rid = accountIdForEmail(b.user_id, "retailer");
+        return `<tr>
+        <td><strong class="mono">${escHtml(b.batch_id)}</strong><small>${escHtml(rid)} · ${escHtml(b.user_id || "")}</small></td>
+        <td>${escHtml(b.source_filename || "—")}</td>
+        <td>${escHtml(b.pipe || "—")}</td>
+        <td><span class="pill">${escHtml(b.status || "")}</span></td>
+        <td class="num">${escHtml(String(b.row_count || 0))}</td>
+        <td class="num">${escHtml(String(b.fetch_ok || 0))}/${escHtml(String(b.fetch_fail || 0))}</td>
+        <td class="num">${escHtml(inr(b.paid_total || 0))}</td>
+        <td><button type="button" class="btn-xs" data-bulk-sync="${escHtml(b.batch_id)}">Sync fetch</button></td>
+      </tr>`;
+      })
+      .join("")}</tbody></table>`;
+    wrap.querySelectorAll("[data-bulk-sync]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const sync = await call(`/api/auth/desk/bbps/bulk/${encodeURIComponent(btn.dataset.bulkSync)}`, {
+          action: "sync",
+        });
+        if (!sync.ok) notify(sync.data.error || "Sync failed.");
+        else notify(`Synced ${btn.dataset.bulkSync}: fetched ${sync.data.fetched || 0}`);
+        loadBulkDesk();
+      });
+    });
   }
 
   let moneyFilter = "all";
@@ -2652,6 +3088,8 @@
         appendFact(facts, "Signature Verified", row.signature_verified ? "Yes" : "No");
         appendFact(facts, "Paid At", fullDateTime(row.paid_at));
         appendFact(facts, "Created At", fullDateTime(row.created_at));
+        appendFact(facts, "Updated At", fullDateTime(row.updated_at));
+        if (row.checkout_url) appendFact(facts, "Checkout URL", row.checkout_url, true);
       }
       if (reviewForm) reviewForm.hidden = true;
     } else {
@@ -2759,11 +3197,11 @@
         .map((p) => {
           const picked = p.pg_order_id === fundSelectedId ? "is-picked" : "";
           return `<tr class="${picked}">
-            <td><strong class="mono-sm">${escHtml(p.pg_order_id)}</strong><br><small>${escHtml(fullDateTime(p.created_at))}</small></td>
-            <td><strong>${escHtml(p.user_id)}</strong><br><small>Cashfree PG · ${p.signature_verified ? "Sig OK" : "Unverified"}</small></td>
+            <td><strong class="mono-sm">${escHtml(p.pg_order_id)}</strong><br><small>Created ${escHtml(fullDateTime(p.created_at))}</small>${p.updated_at ? `<br><small>Updated ${escHtml(fullDateTime(p.updated_at))}</small>` : ""}</td>
+            <td><strong>${escHtml(p.user_id)}</strong><br><small>${escHtml((p.provider || "cashfree").toUpperCase())} · ${p.signature_verified ? "Sig OK" : "Unverified"}</small></td>
             <td><span class="mono-sm">${escHtml(p.provider_payment_id || p.provider_order_id || "—")}</span></td>
             <td class="num"><strong>${inr(p.amount)}</strong></td>
-            <td><span class="pill ${p.status === "paid" ? "success" : p.status === "created" ? "pending" : "failed"}">${escHtml(p.status)}</span><br><small>${p.paid_at ? escHtml(fullDateTime(p.paid_at)) : "—"}</small></td>
+            <td><span class="pill ${p.status === "paid" ? "success" : p.status === "created" ? "pending" : "failed"}">${escHtml(p.status)}</span><br><small>${p.paid_at ? `Paid ${escHtml(fullDateTime(p.paid_at))}` : "Awaiting payment"}</small></td>
             <td><div class="desk-actions"><button type="button" class="btn-xs" data-fund-inspect-pg="${escHtml(p.pg_order_id)}">Full details</button></div></td>
           </tr>`;
         })
@@ -2858,7 +3296,126 @@
 
   let reportTab = "bbps";
   let reportSelectedKey = "";
+  let reportPage = 0;
+  const REPORT_PAGE_SIZE = 25;
   let reportData = { bbps_transactions: [], topup_requests: [], pg_orders: [], ledger: [], holds: [], voucher_orders: [] };
+  const REPORT_TAB_META = {
+    bbps: { title: "BBPS transactions", hint: "Filter All / Success / Pending / Failed. Use Check status for pending Mobikwik rows." },
+    topups: { title: "Fund requests", hint: "Filter by approved, pending, or rejected UTR / bank float submissions." },
+    pg: { title: "PG orders", hint: "Filter paid, awaiting, or failed. Stale awaiting orders auto-check and fail after 30 minutes." },
+    ledger: { title: "Wallet ledger", hint: "Double-entry credits and debits for retailer float." },
+    holds: { title: "Wallet holds", hint: "Filter captured, active, or released holds tied to BBPS or other services." },
+    vouchers: { title: "Voucher orders", hint: "Gift voucher purchases recorded through PaySwap." },
+  };
+
+  function reportRowsForTab() {
+    if (reportTab === "topups") return reportData.topup_requests || [];
+    if (reportTab === "pg") return reportData.pg_orders || [];
+    if (reportTab === "ledger") return reportData.ledger || [];
+    if (reportTab === "holds") return reportData.holds || [];
+    if (reportTab === "vouchers") return reportData.voucher_orders || [];
+    return reportData.bbps_transactions || [];
+  }
+
+  function reportRowKey(row) {
+    if (reportTab === "topups") return row.request_id || "";
+    if (reportTab === "pg") return row.pg_order_id || "";
+    if (reportTab === "ledger") return row.entry_id || "";
+    if (reportTab === "holds") return row.hold_id || "";
+    return row.reference || "";
+  }
+
+  function reportRetailerLabel(email) {
+    const rid = accountIdForEmail(email, "retailer");
+    if (rid) return `${rid} · ${email || ""}`.trim();
+    return email || "—";
+  }
+
+  function reportRetailerCell(email) {
+    const rid = accountIdForEmail(email, "retailer");
+    if (rid) {
+      return `<strong class="mono-sm">${escHtml(rid)}</strong><br><small>${escHtml(email || "—")}</small>`;
+    }
+    return `<span>${escHtml(email || "—")}</span>`;
+  }
+
+  function syncReportFilterVisibility() {
+    const showStatus = reportTab === "bbps" || reportTab === "pg" || reportTab === "topups" || reportTab === "holds";
+    const showRail = reportTab === "bbps";
+    document.querySelectorAll(".reports-filter-status").forEach((el) => {
+      el.hidden = !showStatus;
+    });
+    document.querySelectorAll(".reports-filter-bbps").forEach((el) => {
+      el.hidden = !showRail;
+    });
+    const statusLabel = document.querySelector("[data-report-status-label]");
+    if (statusLabel) {
+      statusLabel.textContent =
+        reportTab === "pg"
+          ? "PG status"
+          : reportTab === "topups"
+            ? "Request status"
+            : reportTab === "holds"
+              ? "Hold status"
+              : "BBPS status";
+    }
+    const meta = REPORT_TAB_META[reportTab] || REPORT_TAB_META.bbps;
+    const title = document.querySelector("[data-report-table-title]");
+    const hint = document.querySelector("[data-report-table-hint]");
+    if (title) title.textContent = meta.title;
+    if (hint) hint.textContent = meta.hint;
+  }
+
+  function paintReportPagination(total) {
+    const control = document.querySelector("[data-report-pagination]");
+    if (!control) return;
+    const pages = Math.max(1, Math.ceil(total / REPORT_PAGE_SIZE) || 1);
+    reportPage = Math.min(Math.max(0, reportPage), pages - 1);
+    const start = total ? reportPage * REPORT_PAGE_SIZE + 1 : 0;
+    const end = Math.min((reportPage + 1) * REPORT_PAGE_SIZE, total);
+    control.replaceChildren();
+    if (!total) {
+      control.hidden = true;
+      return;
+    }
+    control.hidden = false;
+    const count = document.createElement("span");
+    count.className = "log-page-count";
+    if (total <= REPORT_PAGE_SIZE) {
+      count.textContent = `${total} record${total === 1 ? "" : "s"}`;
+      control.append(count);
+      return;
+    }
+    count.textContent = `${start}–${end} of ${total} · Page ${reportPage + 1} of ${pages}`;
+    const actions = document.createElement("span");
+    actions.className = "log-page-actions";
+    [
+      ["Previous", reportPage - 1, reportPage === 0],
+      ["Next", reportPage + 1, reportPage >= pages - 1],
+    ].forEach(([label, target, disabled]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "log-page-button";
+      button.dataset.reportPage = String(target);
+      button.textContent = label;
+      button.disabled = disabled;
+      actions.append(button);
+    });
+    control.append(count, actions);
+  }
+
+  function bindReportInspect(wrap, rows, kind) {
+    wrap.querySelectorAll("[data-rep-inspect]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.repInspect || "";
+        const row = rows.find((x) => reportRowKey(x) === key);
+        if (row) {
+          showReportDetail(row, kind);
+          paintReportsTable();
+        }
+      });
+    });
+  }
 
   function showReportDetail(row, kind) {
     const panel = document.querySelector("[data-report-detail]");
@@ -2872,17 +3429,20 @@
     panel.hidden = false;
     facts.replaceChildren();
     if (syncBtn) {
-      syncBtn.hidden = kind !== "bbps";
+      const canSync = (kind === "bbps" && row.state === "pending") || (kind === "pg" && row.status === "created");
+      syncBtn.hidden = !canSync;
       syncBtn.dataset.reference = kind === "bbps" ? (row.reference || "") : "";
+      syncBtn.dataset.pgOrderId = kind === "pg" ? (row.pg_order_id || "") : "";
+      syncBtn.textContent = "Check live status";
     }
 
     if (kind === "bbps") {
       reportSelectedKey = row.reference || "";
       if (idEl) idEl.textContent = row.reference || "BBPS";
       if (titleEl) titleEl.textContent = `${row.biller || row.operator_id} · ${inr(row.amount)}`;
-      if (subEl) subEl.textContent = `${row.user_id} · ${row.category || "BBPS"} · ${(row.state || "").toUpperCase()}`;
+      if (subEl) subEl.textContent = `${reportRetailerLabel(row.user_id)} · ${row.category || "BBPS"} · ${(row.state || "").toUpperCase()}`;
       appendFact(facts, "Reference", row.reference, true);
-      appendFact(facts, "Retailer Email", row.user_id);
+      appendFact(facts, "Retailer", reportRetailerLabel(row.user_id), true);
       appendFact(facts, "Biller / Operator", `${row.biller || "—"} (${row.operator_id || "—"})`);
       appendFact(facts, "Category", row.category || "—");
       appendFact(facts, "Consumer / Account", row.account || "—", true);
@@ -2901,10 +3461,10 @@
     } else if (kind === "topups") {
       reportSelectedKey = row.request_id || "";
       if (idEl) idEl.textContent = row.request_id || "Fund Request";
-      if (titleEl) titleEl.textContent = `${row.user_id} · ${inr(row.amount)}`;
+      if (titleEl) titleEl.textContent = `${reportRetailerLabel(row.user_id)} · ${inr(row.amount)}`;
       if (subEl) subEl.textContent = `${row.mode} · UTR ${row.utr} · ${(row.status || "").toUpperCase()}`;
       appendFact(facts, "Request ID", row.request_id, true);
-      appendFact(facts, "Retailer Email", row.user_id);
+      appendFact(facts, "Retailer", reportRetailerLabel(row.user_id), true);
       appendFact(facts, "Amount", inr(row.amount));
       appendFact(facts, "Mode", row.mode);
       appendFact(facts, "UTR / Reference", row.utr, true);
@@ -2921,9 +3481,9 @@
       reportSelectedKey = row.pg_order_id || "";
       if (idEl) idEl.textContent = row.pg_order_id || "PG Order";
       if (titleEl) titleEl.textContent = `${row.purpose} · ${inr(row.amount)}`;
-      if (subEl) subEl.textContent = `${row.user_id} · ${(row.status || "").toUpperCase()}`;
+      if (subEl) subEl.textContent = `${reportRetailerLabel(row.user_id)} · ${(row.status || "").toUpperCase()}`;
       appendFact(facts, "PG Order ID", row.pg_order_id, true);
-      appendFact(facts, "Retailer Email", row.user_id);
+      appendFact(facts, "Retailer", reportRetailerLabel(row.user_id), true);
       appendFact(facts, "Provider", row.provider || "cashfree");
       appendFact(facts, "Purpose", row.purpose);
       appendFact(facts, "Service Reference", row.service_ref || "—", true);
@@ -2940,9 +3500,9 @@
       reportSelectedKey = row.entry_id || "";
       if (idEl) idEl.textContent = row.entry_id || "Ledger Entry";
       if (titleEl) titleEl.textContent = `${row.entry_type} · ${row.direction} ${inr(row.amount)}`;
-      if (subEl) subEl.textContent = `${row.user_id} · ${row.narration || "—"}`;
+      if (subEl) subEl.textContent = `${reportRetailerLabel(row.user_id)} · ${row.narration || "—"}`;
       appendFact(facts, "Entry ID", row.entry_id, true);
-      appendFact(facts, "Retailer Email", row.user_id);
+      appendFact(facts, "Retailer", reportRetailerLabel(row.user_id), true);
       appendFact(facts, "Direction / Type", `${row.direction} · ${row.entry_type}`);
       appendFact(facts, "Amount", inr(row.amount));
       appendFact(facts, "Available Balance", `${inr(row.balance_before)} → ${inr(row.balance_after)}`);
@@ -2957,9 +3517,9 @@
       reportSelectedKey = row.hold_id || "";
       if (idEl) idEl.textContent = row.hold_id || "Wallet Hold";
       if (titleEl) titleEl.textContent = `${row.service} · ${inr(row.total)}`;
-      if (subEl) subEl.textContent = `${row.user_id} · ${(row.status || "").toUpperCase()}`;
+      if (subEl) subEl.textContent = `${reportRetailerLabel(row.user_id)} · ${(row.status || "").toUpperCase()}`;
       appendFact(facts, "Hold ID", row.hold_id, true);
-      appendFact(facts, "Retailer Email", row.user_id);
+      appendFact(facts, "Retailer", reportRetailerLabel(row.user_id), true);
       appendFact(facts, "Reference", row.reference, true);
       appendFact(facts, "Service", row.service);
       appendFact(facts, "Amount / Fee / Total", `${inr(row.amount)} + ${inr(row.fee)} = ${inr(row.total)}`);
@@ -2971,9 +3531,9 @@
       reportSelectedKey = row.reference || "";
       if (idEl) idEl.textContent = row.reference || "Voucher Order";
       if (titleEl) titleEl.textContent = `${row.brand || "Voucher"} · ${inr(row.amount)}`;
-      if (subEl) subEl.textContent = `${row.user_id} · ${(row.state || "").toUpperCase()}`;
+      if (subEl) subEl.textContent = `${reportRetailerLabel(row.user_id)} · ${(row.state || "").toUpperCase()}`;
       appendFact(facts, "Reference", row.reference, true);
-      appendFact(facts, "Retailer Email", row.user_id);
+      appendFact(facts, "Retailer", reportRetailerLabel(row.user_id), true);
       appendFact(facts, "Brand", row.brand || "—");
       appendFact(facts, "Amount", inr(row.amount));
       appendFact(facts, "State", row.state || "—");
@@ -2981,7 +3541,7 @@
       appendFact(facts, "Idempotency Key", row.idempotency_key || "—", true);
       appendFact(facts, "Created At", fullDateTime(row.created_at));
     }
-    panel.scrollIntoView({ block: "nearest" });
+    panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
   function paintReportsTable() {
@@ -2993,6 +3553,7 @@
     const ledger = reportData.ledger || [];
     const holds = reportData.holds || [];
     const vouchers = reportData.voucher_orders || [];
+    const allRows = reportRowsForTab();
 
     const setText = (sel, txt) => {
       const el = document.querySelector(sel);
@@ -3000,57 +3561,67 @@
     };
     const bbpsSum = bbps.filter((r) => r.state === "success").reduce((a, r) => a + Number(r.amount || 0), 0);
     setText("[data-rep-bbps-vol]", inr(bbpsSum));
-    setText("[data-rep-bbps-counts]", `${bbps.length} txns · ${bbps.filter((r) => r.state === "pending").length} pending · ${bbps.filter((r) => r.state === "failed").length} failed`);
+    setText(
+      "[data-rep-bbps-counts]",
+      `${bbps.length} txns · ${bbps.filter((r) => r.state === "pending").length} pending · ${bbps.filter((r) => r.state === "failed").length} failed`,
+    );
     const pgSum = pg.filter((r) => r.status === "paid").reduce((a, r) => a + Number(r.amount || 0), 0);
     setText("[data-rep-pg-vol]", inr(pgSum));
-    setText("[data-rep-pg-counts]", `${pg.length} orders (${pg.filter((r) => r.status === "paid").length} paid)`);
+    setText("[data-rep-pg-counts]", `${pg.length} orders · ${pg.filter((r) => r.status === "paid").length} paid`);
     const movesAvailable = (row) => !(row.entry_type === "HOLD_CAPTURE" && row.balance_before === row.balance_after);
     const crSum = ledger.filter((r) => r.direction === "CR" && movesAvailable(r)).reduce((a, r) => a + Number(r.amount || 0), 0);
     const drSum = ledger.filter((r) => r.direction === "DR" && movesAvailable(r)).reduce((a, r) => a + Number(r.amount || 0), 0);
     setText("[data-rep-ledger-count]", String(ledger.length));
     setText("[data-rep-ledger-vol]", `CR ${inr(crSum)} · DR ${inr(drSum)}`);
-    setText('[data-rep-tab-count="bbps"]', `(${bbps.length})`);
-    setText('[data-rep-tab-count="topups"]', `(${topups.length})`);
-    setText('[data-rep-tab-count="pg"]', `(${pg.length})`);
-    setText('[data-rep-tab-count="ledger"]', `(${ledger.length})`);
-    setText('[data-rep-tab-count="holds"]', `(${holds.length})`);
-    setText('[data-rep-tab-count="vouchers"]', `(${vouchers.length})`);
+    setText('[data-rep-tab-count="bbps"]', String(bbps.length));
+    setText('[data-rep-tab-count="topups"]', String(topups.length));
+    setText('[data-rep-tab-count="pg"]', String(pg.length));
+    setText('[data-rep-tab-count="ledger"]', String(ledger.length));
+    setText('[data-rep-tab-count="holds"]', String(holds.length));
+    setText('[data-rep-tab-count="vouchers"]', String(vouchers.length));
 
     document.querySelectorAll("[data-report-tab]").forEach((btn) => {
-      btn.classList.toggle("is-on", btn.dataset.reportTab === reportTab);
+      const on = btn.dataset.reportTab === reportTab;
+      btn.classList.toggle("is-on", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
     });
+    syncReportFilterVisibility();
+    paintReportPagination(allRows.length);
+
+    if (!allRows.length) {
+      const label = (REPORT_TAB_META[reportTab] || {}).title || "records";
+      wrap.innerHTML = `<div class="empty-state reports-empty"><strong>No ${escHtml(label.toLowerCase())}</strong><p>Try another tab, clear filters, or widen the search.</p></div>`;
+      return;
+    }
+
+    const pageRows = allRows.slice(reportPage * REPORT_PAGE_SIZE, (reportPage + 1) * REPORT_PAGE_SIZE);
 
     if (reportTab === "bbps") {
-      if (!bbps.length) {
-        wrap.innerHTML = '<p class="note">No BBPS transactions match these filters.</p>';
-        return;
-      }
-      const rowsHtml = bbps
+      const rowsHtml = pageRows
         .map((r) => {
           const picked = r.reference === reportSelectedKey ? "is-picked" : "";
-          const syncBtn = `<button type="button" class="btn-xs" data-rep-sync="${escHtml(r.reference)}">Check status</button>`;
-          const detail = r.error_message ? `<br><small style="color:var(--danger)">${escHtml(r.error_message)}</small>` : (r.vendor_txn_id ? `<br><small>Vendor: ${escHtml(r.vendor_txn_id)}</small>` : "");
+          const syncBtn =
+            r.state === "pending"
+              ? `<button type="button" class="btn-xs" data-rep-sync="${escHtml(r.reference)}">Check status</button>`
+              : "";
+          const detail = r.error_message
+            ? `<br><small class="is-danger">${escHtml(r.error_message)}</small>`
+            : r.vendor_txn_id
+              ? `<br><small>Vendor ${escHtml(r.vendor_txn_id)}</small>`
+              : "";
           return `<tr class="${picked}">
             <td><strong class="mono-sm">${escHtml(r.reference)}</strong><br><small>${escHtml(fullDateTime(r.created_at))}</small></td>
-            <td>${escHtml(r.user_id)}</td>
+            <td>${reportRetailerCell(r.user_id)}</td>
             <td>${escHtml(r.biller || r.operator_id)}<br><small>${escHtml(r.account || "—")} · ${escHtml(r.category || "BBPS")}</small></td>
-            <td>${escHtml((r.payment_channel || "").toUpperCase())} · ${escHtml(r.payment_mode || "—")}<br><small class="mono-sm">${escHtml(r.wallet_hold_id || r.pg_order_id || "—")}</small></td>
+            <td>${escHtml((r.payment_channel || "").toUpperCase())} · ${escHtml(r.payment_mode || "—")}${r.source === "bulk" ? " · bulk" : ""}<br><small class="mono-sm">${escHtml(r.bulk_batch_id || r.wallet_hold_id || r.pg_order_id || "—")}</small></td>
             <td class="num"><strong>${inr(r.amount)}</strong></td>
             <td><span class="pill ${r.state === "success" ? "success" : r.state === "pending" ? "pending" : "failed"}">${escHtml(r.state)}</span>${detail}</td>
-            <td><div class="desk-actions"><button type="button" class="btn-xs" data-rep-inspect="${escHtml(r.reference)}">Full details</button>${syncBtn}</div></td>
+            <td class="actions-cell"><div class="desk-actions"><button type="button" class="btn-xs primary" data-rep-inspect="${escHtml(r.reference)}">Open</button>${syncBtn}</div></td>
           </tr>`;
         })
         .join("");
-      wrap.innerHTML = `<table class="desk-table"><thead><tr><th>Reference / Date</th><th>Retailer</th><th>Biller / Consumer</th><th>Rail / Hold or PG</th><th class="num">Amount / Fee</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
-      wrap.querySelectorAll("[data-rep-inspect]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const row = bbps.find((x) => x.reference === btn.dataset.repInspect);
-          if (row) {
-            showReportDetail(row, "bbps");
-            paintReportsTable();
-          }
-        });
-      });
+      wrap.innerHTML = `<table class="desk-table"><thead><tr><th>Reference</th><th>Retailer</th><th>Biller / consumer</th><th>Rail</th><th class="num">Amount</th><th>Status</th><th class="actions-cell">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+      bindReportInspect(wrap, bbps, "bbps");
       wrap.querySelectorAll("[data-rep-sync]").forEach((btn) => {
         btn.addEventListener("click", async () => {
           btn.disabled = true;
@@ -3064,178 +3635,148 @@
     }
 
     if (reportTab === "topups") {
-      if (!topups.length) {
-        wrap.innerHTML = '<p class="note">No fund requests match these filters.</p>';
-        return;
-      }
-      const rowsHtml = topups
+      const rowsHtml = pageRows
         .map((t) => {
           const picked = t.request_id === reportSelectedKey ? "is-picked" : "";
           return `<tr class="${picked}">
             <td><strong class="mono-sm">${escHtml(t.request_id)}</strong><br><small>${escHtml(fullDateTime(t.created_at))}</small></td>
-            <td>${escHtml(t.user_id)}</td>
+            <td>${reportRetailerCell(t.user_id)}</td>
             <td>${escHtml(t.mode)} · <span class="mono-sm">${escHtml(t.utr)}</span><br><small>${escHtml(t.remarks || "—")}</small></td>
             <td class="num"><strong>${inr(t.amount)}</strong></td>
-            <td><span class="pill ${t.status === "approved" ? "success" : t.status === "pending" ? "pending" : "failed"}">${escHtml(t.status)}</span><br><small>${escHtml(t.reviewed_by || "Pending")}</small></td>
-            <td><div class="desk-actions"><button type="button" class="btn-xs" data-rep-inspect="${escHtml(t.request_id)}">Full details</button></div></td>
+            <td><span class="pill ${t.status === "approved" ? "success" : t.status === "pending" ? "pending" : "failed"}">${escHtml(t.status)}</span><br><small>${escHtml(t.reviewed_by || "Awaiting review")}</small></td>
+            <td class="actions-cell"><div class="desk-actions"><button type="button" class="btn-xs primary" data-rep-inspect="${escHtml(t.request_id)}">Open</button></div></td>
           </tr>`;
         })
         .join("");
-      wrap.innerHTML = `<table class="desk-table"><thead><tr><th>Request ID / Date</th><th>Retailer</th><th>Mode / UTR / Remarks</th><th class="num">Amount</th><th>Status / Reviewer</th><th style="text-align:right">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
-      wrap.querySelectorAll("[data-rep-inspect]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const row = topups.find((x) => x.request_id === btn.dataset.repInspect);
-          if (row) {
-            showReportDetail(row, "topups");
-            paintReportsTable();
-          }
-        });
-      });
+      wrap.innerHTML = `<table class="desk-table"><thead><tr><th>Request</th><th>Retailer</th><th>Mode / UTR</th><th class="num">Amount</th><th>Status</th><th class="actions-cell">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+      bindReportInspect(wrap, topups, "topups");
       return;
     }
 
     if (reportTab === "pg") {
-      if (!pg.length) {
-        wrap.innerHTML = '<p class="note">No PG orders recorded yet.</p>';
-        return;
-      }
-      const rowsHtml = pg
+      const rowsHtml = pageRows
         .map((p) => {
           const picked = p.pg_order_id === reportSelectedKey ? "is-picked" : "";
+          const syncBtn =
+            p.status === "created"
+              ? `<button type="button" class="btn-xs" data-rep-pg-sync="${escHtml(p.pg_order_id)}">Check status</button>`
+              : "";
+          const statusNote = p.paid_at
+            ? `Paid ${escHtml(fullDateTime(p.paid_at))}`
+            : p.status === "failed"
+              ? escHtml((p.meta && p.meta.abandon_reason) || "Not completed")
+              : "Awaiting payment";
           return `<tr class="${picked}">
-            <td><strong class="mono-sm">${escHtml(p.pg_order_id)}</strong><br><small>${escHtml(fullDateTime(p.created_at))}</small></td>
-            <td>${escHtml(p.user_id)}</td>
+            <td><strong class="mono-sm">${escHtml(p.pg_order_id)}</strong><br><small>Created ${escHtml(fullDateTime(p.created_at))}</small>${p.updated_at ? `<br><small>Updated ${escHtml(fullDateTime(p.updated_at))}</small>` : ""}</td>
+            <td>${reportRetailerCell(p.user_id)}<br><small>${escHtml((p.provider || "cashfree").toUpperCase())}</small></td>
             <td>${escHtml(p.purpose)}<br><small class="mono-sm">${escHtml(p.service_ref || "—")}</small></td>
             <td class="mono-sm">${escHtml(p.provider_payment_id || p.provider_order_id || "—")}</td>
             <td class="num"><strong>${inr(p.amount)}</strong></td>
-            <td><span class="pill ${p.status === "paid" ? "success" : p.status === "created" ? "pending" : "failed"}">${escHtml(p.status)}</span><br><small>${p.paid_at ? escHtml(fullDateTime(p.paid_at)) : "—"}</small></td>
-            <td><div class="desk-actions"><button type="button" class="btn-xs" data-rep-inspect="${escHtml(p.pg_order_id)}">Full details</button></div></td>
+            <td><span class="pill ${p.status === "paid" ? "success" : p.status === "created" ? "pending" : "failed"}">${escHtml(p.status)}</span><br><small>${statusNote}</small></td>
+            <td class="actions-cell"><div class="desk-actions"><button type="button" class="btn-xs primary" data-rep-inspect="${escHtml(p.pg_order_id)}">Open</button>${syncBtn}</div></td>
           </tr>`;
         })
         .join("");
-      wrap.innerHTML = `<table class="desk-table"><thead><tr><th>PG Order / Date</th><th>Retailer</th><th>Purpose / Ref</th><th>Provider ID</th><th class="num">Amount</th><th>Status / Paid</th><th style="text-align:right">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
-      wrap.querySelectorAll("[data-rep-inspect]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const row = pg.find((x) => x.pg_order_id === btn.dataset.repInspect);
-          if (row) {
-            showReportDetail(row, "pg");
-            paintReportsTable();
-          }
+      wrap.innerHTML = `<table class="desk-table"><thead><tr><th>PG order</th><th>Retailer</th><th>Purpose</th><th>Provider ref</th><th class="num">Amount</th><th>Status</th><th class="actions-cell">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+      bindReportInspect(wrap, pg, "pg");
+      wrap.querySelectorAll("[data-rep-pg-sync]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          const res = await call("/api/auth/desk/transactions/pg-sync", { pg_order_id: btn.dataset.repPgSync });
+          if (!res.ok) notify(res.data.error || "Could not sync PG status.");
+          else notify(`PG ${btn.dataset.repPgSync}: ${res.data.status || "synced"}`);
+          await loadReports();
         });
       });
       return;
     }
 
     if (reportTab === "holds") {
-      if (!holds.length) {
-        wrap.innerHTML = '<p class="note">No wallet holds recorded yet.</p>';
-        return;
-      }
-      const rowsHtml = holds
+      const rowsHtml = pageRows
         .map((h) => {
           const picked = h.hold_id === reportSelectedKey ? "is-picked" : "";
           return `<tr class="${picked}">
             <td><strong class="mono-sm">${escHtml(h.hold_id)}</strong><br><small>${escHtml(fullDateTime(h.created_at))}</small></td>
-            <td>${escHtml(h.user_id)}</td>
+            <td>${reportRetailerCell(h.user_id)}</td>
             <td>${escHtml((h.service || "").toUpperCase())}<br><small class="mono-sm">${escHtml(h.reference)}</small></td>
-            <td class="num"><strong>${inr(h.total)}</strong><br><small>Amt ${inr(h.amount)} + Fee ${inr(h.fee)}</small></td>
-            <td><span class="pill ${h.status === "captured" ? "success" : h.status === "active" ? "pending" : "neutral"}">${escHtml(h.status)}</span><br><small>${h.resolved_at ? escHtml(fullDateTime(h.resolved_at)) : "—"}</small></td>
-            <td><div class="desk-actions"><button type="button" class="btn-xs" data-rep-inspect="${escHtml(h.hold_id)}">Full details</button></div></td>
+            <td class="num"><strong>${inr(h.total)}</strong><br><small>Amt ${inr(h.amount)} + fee ${inr(h.fee)}</small></td>
+            <td><span class="pill ${h.status === "captured" ? "success" : h.status === "active" ? "pending" : "neutral"}">${escHtml(h.status)}</span><br><small>${h.resolved_at ? escHtml(fullDateTime(h.resolved_at)) : "Open"}</small></td>
+            <td class="actions-cell"><div class="desk-actions"><button type="button" class="btn-xs primary" data-rep-inspect="${escHtml(h.hold_id)}">Open</button></div></td>
           </tr>`;
         })
         .join("");
-      wrap.innerHTML = `<table class="desk-table"><thead><tr><th>Hold ID / Created</th><th>Retailer</th><th>Service / Ref</th><th class="num">Total</th><th>Status / Resolved</th><th style="text-align:right">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
-      wrap.querySelectorAll("[data-rep-inspect]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const row = holds.find((x) => x.hold_id === btn.dataset.repInspect);
-          if (row) {
-            showReportDetail(row, "holds");
-            paintReportsTable();
-          }
-        });
-      });
+      wrap.innerHTML = `<table class="desk-table"><thead><tr><th>Hold</th><th>Retailer</th><th>Service / ref</th><th class="num">Total</th><th>Status</th><th class="actions-cell">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+      bindReportInspect(wrap, holds, "holds");
       return;
     }
 
     if (reportTab === "vouchers") {
-      if (!vouchers.length) {
-        wrap.innerHTML = '<p class="note">No voucher orders recorded yet.</p>';
-        return;
-      }
-      const rowsHtml = vouchers
+      const rowsHtml = pageRows
         .map((v) => {
           const picked = v.reference === reportSelectedKey ? "is-picked" : "";
           return `<tr class="${picked}">
             <td><strong class="mono-sm">${escHtml(v.reference)}</strong><br><small>${escHtml(fullDateTime(v.created_at))}</small></td>
-            <td>${escHtml(v.user_id)}</td>
+            <td>${reportRetailerCell(v.user_id)}</td>
             <td>${escHtml(v.brand || "Voucher")}</td>
             <td class="num"><strong>${inr(v.amount)}</strong></td>
             <td><span class="pill success">${escHtml(v.state || "done")}</span></td>
-            <td><div class="desk-actions"><button type="button" class="btn-xs" data-rep-inspect="${escHtml(v.reference)}">Full details</button></div></td>
+            <td class="actions-cell"><div class="desk-actions"><button type="button" class="btn-xs primary" data-rep-inspect="${escHtml(v.reference)}">Open</button></div></td>
           </tr>`;
         })
         .join("");
-      wrap.innerHTML = `<table class="desk-table"><thead><tr><th>Reference / Date</th><th>Retailer</th><th>Brand</th><th class="num">Amount</th><th>State</th><th style="text-align:right">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
-      wrap.querySelectorAll("[data-rep-inspect]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const row = vouchers.find((x) => x.reference === btn.dataset.repInspect);
-          if (row) {
-            showReportDetail(row, "vouchers");
-            paintReportsTable();
-          }
-        });
-      });
+      wrap.innerHTML = `<table class="desk-table"><thead><tr><th>Reference</th><th>Retailer</th><th>Brand</th><th class="num">Amount</th><th>State</th><th class="actions-cell">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+      bindReportInspect(wrap, vouchers, "vouchers");
       return;
     }
 
-    if (!ledger.length) {
-      wrap.innerHTML = '<p class="note">No wallet ledger entries recorded yet.</p>';
-      return;
-    }
-    const rowsHtml = ledger
+    const rowsHtml = pageRows
       .map((l) => {
         const picked = l.entry_id === reportSelectedKey ? "is-picked" : "";
         const settledHold = l.entry_type === "HOLD_CAPTURE" && l.balance_before === l.balance_after;
         const amountLabel = settledHold ? "SETTLED ₹0.00" : `${l.direction} ${inr(l.amount)}`;
         return `<tr class="${picked}">
           <td><strong class="mono-sm">${escHtml(l.entry_id)}</strong><br><small>${escHtml(fullDateTime(l.created_at))}</small></td>
-          <td>${escHtml(l.user_id)}<br><small>${escHtml(l.actor || "")}</small></td>
+          <td>${reportRetailerCell(l.user_id)}<br><small>${escHtml(l.actor || "")}</small></td>
           <td><strong>${escHtml(settledHold ? "HOLD_SETTLED" : l.entry_type)}</strong><br><small>${escHtml(l.narration || "—")}</small></td>
           <td class="mono-sm">${escHtml(l.reference || "—")}</td>
           <td class="num"><span class="pill ${l.direction === "CR" ? "success" : settledHold ? "neutral" : "pending"}">${escHtml(amountLabel)}</span></td>
           <td class="num"><small>${inr(l.balance_before)} →</small> <strong>${inr(l.balance_after)}</strong></td>
-          <td><div class="desk-actions"><button type="button" class="btn-xs" data-rep-inspect="${escHtml(l.entry_id)}">Full details</button></div></td>
+          <td class="actions-cell"><div class="desk-actions"><button type="button" class="btn-xs primary" data-rep-inspect="${escHtml(l.entry_id)}">Open</button></div></td>
         </tr>`;
       })
       .join("");
-    wrap.innerHTML = `<table class="desk-table"><thead><tr><th>Entry / Date</th><th>Retailer / Actor</th><th>Type / Narration</th><th>Reference</th><th class="num">Amount</th><th class="num">Balance Before → After</th><th style="text-align:right">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
-    wrap.querySelectorAll("[data-rep-inspect]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const row = ledger.find((x) => x.entry_id === btn.dataset.repInspect);
-        if (row) {
-          showReportDetail(row, "ledger");
-          paintReportsTable();
-        }
-      });
-    });
+    wrap.innerHTML = `<table class="desk-table"><thead><tr><th>Entry</th><th>Retailer</th><th>Type</th><th>Reference</th><th class="num">Amount</th><th class="num">Balance</th><th class="actions-cell">Actions</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+    bindReportInspect(wrap, ledger, "ledger");
   }
 
   async function loadReports() {
     const form = document.getElementById("report-filter-form");
+    const statusEl = document.querySelector("[data-report-load-status]");
+    const wrap = document.querySelector("[data-report-table]");
+    if (statusEl) {
+      statusEl.hidden = false;
+      statusEl.textContent = "Loading…";
+    }
     const params = new URLSearchParams();
     const email = form?.elements.email?.value.trim() || "";
     const q = form?.elements.q?.value.trim() || "";
     const state = form?.elements.state?.value || "all";
     const channel = form?.elements.channel?.value || "all";
+    const source = form?.elements.source?.value || "all";
+    const batchId = form?.elements.batch_id?.value.trim() || "";
     if (email) params.set("email", email);
     if (q) params.set("q", q);
+    /* state/channel/source only affect BBPS rows server-side; keep them on every load so tab switches stay consistent. */
     if (state !== "all") params.set("state", state);
     if (channel !== "all") params.set("channel", channel);
+    if (source !== "all") params.set("source", source);
+    if (batchId) params.set("batch_id", batchId);
     const qs = params.toString();
     const res = await call("/api/auth/desk/transactions" + (qs ? "?" + qs : ""));
+    if (statusEl) statusEl.hidden = true;
     if (!res.ok) {
-      const wrap = document.querySelector("[data-report-table]");
-      if (wrap) wrap.innerHTML = `<p class="note">${escHtml(res.data.error || "Could not load transaction reports.")}</p>`;
+      if (wrap) wrap.innerHTML = `<p class="note empty-state">${escHtml(res.data.error || "Could not load transaction reports.")}</p>`;
+      paintReportPagination(0);
       return;
     }
     reportData = {
@@ -3248,18 +3789,8 @@
     };
     paintReportsTable();
     if (reportSelectedKey) {
-      const activeList = reportTab === "bbps" ? reportData.bbps_transactions
-        : reportTab === "topups" ? reportData.topup_requests
-        : reportTab === "pg" ? reportData.pg_orders
-        : reportTab === "holds" ? reportData.holds
-        : reportTab === "vouchers" ? reportData.voucher_orders
-        : reportData.ledger;
-      const keyName = reportTab === "bbps" || reportTab === "vouchers" ? "reference"
-        : reportTab === "topups" ? "request_id"
-        : reportTab === "pg" ? "pg_order_id"
-        : reportTab === "holds" ? "hold_id"
-        : "entry_id";
-      const match = (activeList || []).find((x) => x[keyName] === reportSelectedKey);
+      const activeList = reportRowsForTab();
+      const match = (activeList || []).find((x) => reportRowKey(x) === reportSelectedKey);
       if (match) showReportDetail(match, reportTab);
     }
   }
@@ -3726,6 +4257,9 @@
       allow_wallet_pay: Boolean(form.elements.allow_wallet_pay?.checked),
       allow_pg_pay: Boolean(form.elements.allow_pg_pay?.checked),
       allow_pg_topup: Boolean(form.elements.allow_pg_topup?.checked),
+      pg_provider: form.elements.pg_provider?.value || "both",
+      bbps_pipe: form.elements.bbps_pipe?.value || "mobikwik",
+      bbps_bulk_enabled: Boolean(form.elements.bbps_bulk_enabled?.checked),
       default_per_txn_limit: form.elements.default_per_txn_limit?.value,
       default_daily_debit_limit: form.elements.default_daily_debit_limit?.value,
       default_min_balance: form.elements.default_min_balance?.value,
@@ -4515,6 +5049,7 @@
       const next = btn.dataset.payswapOpen || "hub";
       showPayswapView(next);
       if (next === "activity") loadPayswapActivity();
+      if (next === "bulk") loadBulkDesk();
       if (next === "bbps") {
         if (payswapPolicyCache) fillDefaultBbpsCats(payswapPolicyCache);
         else loadPayswap();
@@ -4533,6 +5068,11 @@
     });
   });
 
+  document.querySelector("[data-bulk-desk-refresh]")?.addEventListener("click", () => loadBulkDesk());
+  document.querySelector("[data-bulk-desk-q]")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") loadBulkDesk();
+  });
+
   document.querySelector("[data-bbps-unrestricted]")?.addEventListener("change", (event) => {
     const on = Boolean(event.currentTarget.checked);
     document.querySelectorAll('input[name="bbps_cat"]').forEach((cb) => {
@@ -4540,9 +5080,23 @@
       if (on) cb.checked = true;
     });
     document.querySelector("[data-default-bbps-cats]")?.classList.toggle("is-dimmed", on);
+    if (payswapPolicyCache) {
+      paintBbpsCatStats({
+        ...payswapPolicyCache,
+        bbps_categories_unrestricted: on,
+      });
+    } else {
+      paintBbpsCatStats({
+        bbps_catalog: Array.from(document.querySelectorAll('input[name="bbps_cat"]')).map((el) => ({ id: el.value })),
+        enabled_bbps_categories: Array.from(document.querySelectorAll('input[name="bbps_cat"]:checked')).map((el) => el.value),
+        bbps_categories_unrestricted: on,
+      });
+    }
   });
 
-  document.querySelector("[data-bbps-cats-save]")?.addEventListener("click", async () => {
+  document.querySelector("[data-bbps-cat-search]")?.addEventListener("input", filterBbpsCatTiles);
+
+  async function saveBbpsCategories() {
     const unrestricted = Boolean(document.querySelector("[data-bbps-unrestricted]")?.checked);
     const enabled_bbps_categories = unrestricted
       ? []
@@ -4555,6 +5109,10 @@
     payswapPolicyCache = res.data;
     fillDefaultBbpsCats(res.data);
     notify(unrestricted ? "All BBPS categories enabled for retailers." : "Default BBPS categories saved.");
+  }
+
+  document.querySelectorAll("[data-bbps-cats-save]").forEach((btn) => {
+    btn.addEventListener("click", saveBbpsCategories);
   });
 
   document.querySelector("[data-retailer-svc-load]")?.addEventListener("click", () => {
@@ -4571,15 +5129,22 @@
   document.getElementById("admin-wallet-adjust")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
-    const res = await call("/api/auth/desk/wallets/adjust", {
-      email: form.elements.email?.value.trim(),
-      direction: form.elements.direction?.value,
-      amount: form.elements.amount?.value,
-      reason: form.elements.reason?.value.trim(),
-    });
+    const submit = form.querySelector("[type=submit]");
+    if (submit) submit.disabled = true;
+    const res = await call(
+      "/api/auth/desk/wallets/adjust",
+      {
+        email: form.elements.email?.value.trim(),
+        direction: form.elements.direction?.value,
+        amount: form.elements.amount?.value,
+        reason: form.elements.reason?.value.trim(),
+      },
+      { "Idempotency-Key": moneyKey() },
+    );
+    if (submit) submit.disabled = false;
     if (!res.ok) return notify(res.data.error || "Adjustment failed.");
     form.reset();
-    notify("Wallet adjustment recorded.");
+    notify(res.data.pending ? "Waiting for a second admin to approve this adjustment." : "Wallet adjustment recorded.");
     loadMoney();
   });
 
@@ -4677,23 +5242,39 @@
   document.querySelector("[data-report-detail-sync]")?.addEventListener("click", async (event) => {
     const btn = event.currentTarget;
     const reference = btn.dataset.reference || "";
-    if (!reference) return;
+    const pgOrderId = btn.dataset.pgOrderId || "";
     btn.disabled = true;
-    const res = await call("/api/auth/desk/transactions/bbps-sync", { reference });
-    btn.disabled = false;
-    if (!res.ok) notify(res.data.error || "Could not sync status.");
-    else notify(`BBPS ${reference}: ${res.data.state || "synced"}`);
+    let res;
+    if (pgOrderId) {
+      res = await call("/api/auth/desk/transactions/pg-sync", { pg_order_id: pgOrderId });
+      btn.disabled = false;
+      if (!res.ok) notify(res.data.error || "Could not sync PG status.");
+      else notify(`PG ${pgOrderId}: ${res.data.status || "synced"}`);
+    } else if (reference) {
+      res = await call("/api/auth/desk/transactions/bbps-sync", { reference });
+      btn.disabled = false;
+      if (!res.ok) notify(res.data.error || "Could not sync status.");
+      else notify(`BBPS ${reference}: ${res.data.state || "synced"}`);
+    } else {
+      btn.disabled = false;
+      return;
+    }
     await loadReports();
   });
 
   document.getElementById("report-filter-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
+    reportPage = 0;
+    reportSelectedKey = "";
+    const detail = document.querySelector("[data-report-detail]");
+    if (detail) detail.hidden = true;
     loadReports();
   });
 
   document.getElementById("report-reset-btn")?.addEventListener("click", () => {
     const form = document.getElementById("report-filter-form");
     if (form) form.reset();
+    reportPage = 0;
     reportSelectedKey = "";
     const detail = document.querySelector("[data-report-detail]");
     if (detail) detail.hidden = true;
@@ -4703,6 +5284,7 @@
   document.querySelectorAll("[data-report-tab]").forEach((btn) => {
     btn.addEventListener("click", () => {
       reportTab = btn.dataset.reportTab || "bbps";
+      reportPage = 0;
       reportSelectedKey = "";
       const detail = document.querySelector("[data-report-detail]");
       if (detail) detail.hidden = true;
@@ -4710,14 +5292,20 @@
     });
   });
 
-  document.getElementById("report-export-csv")?.addEventListener("click", () => {
-    const rows = reportTab === "pg" ? reportData.pg_orders
-      : reportTab === "ledger" ? reportData.ledger
-      : reportTab === "topups" ? reportData.topup_requests
-      : reportTab === "holds" ? reportData.holds
-      : reportTab === "vouchers" ? reportData.voucher_orders
-      : reportData.bbps_transactions;
-    if (!rows || !rows.length) return notify("No rows to export.");
+  document.querySelector("[data-report-pagination]")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-report-page]");
+    if (!btn || btn.disabled) return;
+    const next = Number(btn.dataset.reportPage);
+    if (!Number.isFinite(next) || next < 0) return;
+    reportPage = next;
+    paintReportsTable();
+    document.querySelector("[data-report-table]")?.scrollIntoView({ block: "nearest" });
+  });
+
+  function exportReportCsv() {
+    const rows = reportRowsForTab();
+    const label = (REPORT_TAB_META[reportTab] || {}).title || reportTab;
+    if (!rows || !rows.length) return notify(`No ${String(label).toLowerCase()} to export. Apply filters or pick another tab.`);
     const flat = rows.map((r) => {
       const out = {};
       Object.entries(r).forEach(([k, v]) => {
@@ -4736,6 +5324,11 @@
     a.download = `payswap-${reportTab}-report.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
+    notify(`Exported ${rows.length} ${label.toLowerCase()}.`);
+  }
+
+  document.querySelectorAll("[data-report-export]").forEach((btn) => {
+    btn.addEventListener("click", exportReportCsv);
   });
 
   document.getElementById("range")?.addEventListener("change", () => {
@@ -4860,7 +5453,9 @@
       codes: "Verify email and mobile",
       aadhaar: "Open DigiLocker",
       "aadhaar-done": "Continue to PAN",
-      pan: "Check PAN and create account",
+      pan: "Check PAN",
+      business: "Verify GST and Udyam",
+      review: "Approve outlet",
       done: "Add another account",
     };
     const hints = {
@@ -4870,7 +5465,9 @@
       codes: "Enter both codes. A retailer then continues to DigiLocker.",
       aadhaar: "Opens DigiLocker for this retailer. The account is not created yet.",
       "aadhaar-done": "After DigiLocker shows success, this desk checks Cashfree every few seconds. You can also press Continue.",
-      pan: "Checks the PAN and creates the retailer account.",
+      pan: "Checks the PAN against the registry. GST and Udyam come next.",
+      business: "Stand at the outlet. Cashfree must show an active GSTIN and a live Udyam for the same business.",
+      review: "Approving opens sign-in. Until then the retailer cannot enter PaySwap.",
       done: "The new account appears in the list on the left.",
     };
     addForm.querySelector("[data-add-submit]").textContent = labels[step] || "Continue";
@@ -4969,13 +5566,47 @@
       showAddStep("pan");
       return;
     }
-    const created = await call("/api/auth/signup/pan", {
-      signup_id: addSignup,
-      pan: field("pan").value,
-      name: field("pan_name").value,
+    if (addStep === "pan") {
+      const checked = await call("/api/auth/signup/pan", {
+        signup_id: addSignup,
+        pan: field("pan").value,
+        name: field("pan_name").value,
+      });
+      if (!checked.ok || !checked.data.business_required) return addError(checked.data.error || "Verification did not succeed.");
+      showAddStep("business");
+      return;
+    }
+    if (addStep === "business") {
+      if (field("location_source").value !== "desk") {
+        return addError("Capture this desk's location before continuing.");
+      }
+      const opened = await call("/api/auth/signup/business", {
+        signup_id: addSignup,
+        gstin: field("gstin").value,
+        udyam: field("udyam").value,
+        outlet_name: field("outlet_name").value,
+        lat: field("lat").value,
+        lng: field("lng").value,
+        location_source: "desk",
+      });
+      if (!opened.ok || !opened.data.account_ready) return addError(opened.data.error || "Business verification did not succeed.");
+      const note = addForm.querySelector("[data-add-review]");
+      if (note) {
+        note.textContent = (opened.data.legal_name || "The business") + " matched GST and Udyam. Sign-in stays closed until you approve.";
+      }
+      showAddStep("review");
+      return;
+    }
+    const reviewed = await call("/api/auth/desk/business-review", {
+      email: field("email").value,
+      decision: "approve",
     });
-    if (!created.ok || !created.data.account_ready) return addError(created.data.error || "Verification did not succeed.");
+    if (!reviewed.ok) return addError(reviewed.data.error || "Could not approve the outlet.");
     return finishAddAccount(field("email").value, "retailer");
+  });
+
+  document.querySelector("[data-add-locate]")?.addEventListener("click", () => {
+    captureDeskLocation(field("lat"), field("lng"), field("location_source"), addError);
   });
 
   Promise.all([call("/api/auth/me"), call("/api/auth/setup")]).then(([me, setup]) => {

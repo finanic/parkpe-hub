@@ -81,4 +81,6 @@ def _allow(response, origin: str) -> None:
     response["Access-Control-Allow-Credentials"] = "true"
     response["Access-Control-Allow-Headers"] = ALLOW_HEADERS
     response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    # Browser fetch needs this to read CSV filename from Content-Disposition.
+    response["Access-Control-Expose-Headers"] = "Content-Disposition, X-Request-Id"
     response["Vary"] = "Origin"

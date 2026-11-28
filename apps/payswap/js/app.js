@@ -14,6 +14,228 @@
   const esc = window.Payswap.esc;
   const rupee = window.Payswap.rupee;
 
+  /* PayU Hosted Checkout: real browser form POST (not fetch) to PayU _payment. */
+  function submitPayuHostedCheckout(payload) {
+    const action = payload && payload.action;
+    const params = payload && payload.params;
+    if (!action || !params || typeof params !== "object" || !params.hash) return false;
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = action;
+    form.style.display = "none";
+    Object.keys(params).forEach((name) => {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      input.value = String(params[name] == null ? "" : params[name]);
+      form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+    return true;
+  }
+
+  /* Cashfree: prefer hosted payment-link URL (full redirect). Fallback to JS SDK session. */
+  function openCashfreeCheckout(payload) {
+    const checkoutUrl = payload && String(payload.checkout_url || "").trim();
+    if (checkoutUrl && /^https:\/\//i.test(checkoutUrl)) {
+      window.location.assign(checkoutUrl);
+      return true;
+    }
+    const sessionId = payload && String(payload.payment_session_id || "").trim();
+    if (!sessionId) return false;
+    if (typeof globalThis.Cashfree !== "function") return false;
+    const mode = String(payload.cashfree_mode || "sandbox").toLowerCase() === "production" ? "production" : "sandbox";
+    try {
+      const cashfree = globalThis.Cashfree({ mode });
+      const result = cashfree.checkout({ paymentSessionId: sessionId, redirectTarget: "_self" });
+      if (result && typeof result.then === "function") {
+        result.then((out) => {
+          if (out && out.error) {
+            console.warn("Cashfree checkout", out.error.message || out.error);
+          }
+        }).catch(() => {});
+      }
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  function hashRouteParts() {
+    const raw = (location.hash || "").replace(/^#/, "");
+    const q = raw.indexOf("?");
+    if (q < 0) return { page: raw.trim(), params: new URLSearchParams() };
+    return { page: raw.slice(0, q).trim(), params: new URLSearchParams(raw.slice(q + 1)) };
+  }
+
+  function playPgTone(ok) {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const now = ctx.currentTime;
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0.0001, now);
+      master.connect(ctx.destination);
+      if (ok) {
+        master.gain.exponentialRampToValueAtTime(0.09, now + 0.02);
+        master.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+        [523.25, 659.25, 783.99].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = freq;
+          const t0 = now + i * 0.09;
+          gain.gain.setValueAtTime(0.0001, t0);
+          gain.gain.exponentialRampToValueAtTime(0.12, t0 + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(t0);
+          osc.stop(t0 + 0.3);
+        });
+        window.setTimeout(() => ctx.close().catch(() => {}), 700);
+      } else {
+        master.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+        master.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+        const osc = ctx.createOscillator();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.exponentialRampToValueAtTime(120, now + 0.34);
+        osc.connect(master);
+        osc.start(now);
+        osc.stop(now + 0.38);
+        osc.onended = () => ctx.close().catch(() => {});
+      }
+    } catch {
+      /* autoplay may be blocked after gateway redirect */
+    }
+  }
+
+  function dismissPgOutcome() {
+    document.getElementById("pg-outcome")?.remove();
+  }
+
+  /* PaySwap PG return UX — not Bharat Connect / BBPS mogo. */
+  function showPgOutcome({ ok = false, amount = "", orderId = "", detail = "" } = {}) {
+    dismissPgOutcome();
+    dismissBbpsCelebration();
+    playPgTone(!!ok);
+    const host = document.createElement("div");
+    host.id = "pg-outcome";
+    host.className = `pg-outcome ${ok ? "is-ok" : "is-fail"}`;
+    host.setAttribute("role", "dialog");
+    host.setAttribute("aria-modal", "true");
+    host.setAttribute("aria-label", ok ? "Payment successful" : "Payment failed");
+    const title = ok ? "Payment successful" : "Payment failed";
+    const meta = detail || (ok ? "Wallet credit is on the way." : "No money was taken for this attempt.");
+    const amountLine = amount ? `<p class="pg-outcome-amount">${esc(rupee(amount))}</p>` : "";
+    const refLine = orderId ? `<p class="pg-outcome-ref">Order ${esc(orderId)}</p>` : "";
+    host.innerHTML = `
+      <div class="pg-outcome-card">
+        <div class="pg-outcome-burst" aria-hidden="true"></div>
+        <div class="pg-outcome-mark" aria-hidden="true"><span class="mi">${ok ? "check" : "close"}</span></div>
+        <p class="pg-outcome-kicker">PaySwap</p>
+        <h2>${title}</h2>
+        ${amountLine}
+        <p class="pg-outcome-meta">${esc(meta)}</p>
+        ${refLine}
+        <button type="button" class="btn ${ok ? "yellow" : ""} block" data-pg-outcome-close>Continue</button>
+      </div>`;
+    document.body.appendChild(host);
+    requestAnimationFrame(() => host.classList.add("is-on"));
+    host.querySelector("[data-pg-outcome-close]")?.addEventListener("click", dismissPgOutcome);
+    host.addEventListener("click", (event) => {
+      if (event.target === host) dismissPgOutcome();
+    });
+    window.setTimeout(dismissPgOutcome, ok ? 5200 : 6000);
+  }
+
+  function applyPgReturnResult(res, { fallbackOk = null, orderId = "" } = {}) {
+    if (res && res.ok && res.data && res.data.wallet) updateHeaderWallet(res.data.wallet);
+    const status = String((res && res.data && res.data.status) || "").toLowerCase();
+    const state = String((res && res.data && res.data.state) || "").toLowerCase();
+    const paid = status === "paid" || state === "success";
+    const failed = status === "failed" || state === "failed" || state === "failure";
+    const ok = paid ? true : failed ? false : fallbackOk;
+    if (ok == null) return;
+    const amount = (res && res.data && (res.data.amount || res.data.total_amount)) || "";
+    const oid = orderId || (res && res.data && (res.data.pg_order_id || res.data.order_id)) || "";
+    showPgOutcome({
+      ok,
+      amount,
+      orderId: oid,
+      detail: ok
+        ? state === "success"
+          ? "Bill payment settled."
+          : "Top-up settled on your wallet."
+        : (res && res.error) || "Gateway reported a failed or cancelled payment.",
+    });
+    const page = hashRouteParts().page || "wallet";
+    if (page === "wallet" || !page) initWalletScreen();
+  }
+
+  function resumeCashfreeReturn() {
+    const params = new URLSearchParams(location.search || "");
+    const orderId = (params.get("cf_order_id") || params.get("order_id") || params.get("link_id") || "").trim();
+    if (!orderId || !globalThis.PayswapHub) return;
+    // Clear return params so refresh does not re-verify forever.
+    try {
+      const clean = location.pathname + (location.hash || "#wallet");
+      history.replaceState(null, "", clean);
+    } catch (_err) {}
+    globalThis.PayswapHub.verifyPgOrder(orderId, crypto.randomUUID()).then((res) => {
+      applyPgReturnResult(res, { orderId });
+    });
+  }
+
+  const PAYU_RETURN_KEY = "payswap-payu-return";
+
+  /* Must run before route()/show() — show() used to replace #wallet?payu=… with #wallet. */
+  function capturePayuReturn() {
+    const { page, params } = hashRouteParts();
+    const flag = String(params.get("payu") || "").trim().toLowerCase();
+    if (flag !== "ok" && flag !== "fail") return null;
+    const orderId = String(params.get("order_id") || "").trim();
+    try {
+      history.replaceState(null, "", `${location.pathname}#${page || "wallet"}`);
+    } catch (_err) {}
+    return { ok: flag === "ok", orderId, page: page || "wallet" };
+  }
+
+  function stashPayuReturn(data) {
+    if (!data) return;
+    try {
+      sessionStorage.setItem(PAYU_RETURN_KEY, JSON.stringify(data));
+    } catch (_err) {}
+  }
+
+  function takeStashedPayuReturn() {
+    try {
+      const raw = sessionStorage.getItem(PAYU_RETURN_KEY);
+      if (!raw) return null;
+      sessionStorage.removeItem(PAYU_RETURN_KEY);
+      return JSON.parse(raw);
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function resumePayuReturn(captured) {
+    if (!captured) return;
+    const { ok: fallbackOk, orderId } = captured;
+    showPgOutcome({
+      ok: fallbackOk,
+      orderId: orderId || "",
+      detail: fallbackOk ? "Payment completed on PayU." : "Payment did not complete on PayU.",
+    });
+    if (!orderId || !globalThis.PayswapHub || !appState.user) return;
+    globalThis.PayswapHub.verifyPgOrder(orderId, crypto.randomUUID())
+      .then((res) => applyPgReturnResult(res, { fallbackOk, orderId }))
+      .catch(() => {});
+  }
+
   const appState = {
     user: null,
     entitlements: null,
@@ -21,6 +243,7 @@
     walletLedger: [],
     ledgerDirFilter: "all",
     pgConfigured: false,
+    pgProvider: "both",
     transactions: [],
     pgOrders: [],
     txnServiceFilter: "all",
@@ -46,6 +269,9 @@
     plans: [],
     planCategory: "all",
   };
+  let txnSearchTimer = 0;
+  let coreStateFetchedAt = 0;
+  const CORE_STATE_TTL_MS = 45000;
 
   function isPrepaidLike(op) {
     const cat = String((op && op.category) || bbpsState.category || "").toUpperCase();
@@ -174,9 +400,12 @@
     let visibleServiceItems = 0;
     document.querySelectorAll(".nav[data-service]").forEach((link) => {
       const svc = link.dataset.service;
-      const on = enabled.includes(svc);
+      let on = enabled.includes(svc);
+      if (svc === "bbps_bulk") {
+        on = enabled.includes("bbps") && Boolean(ent.bbps_bulk_enabled);
+      }
       link.hidden = !on;
-      if (["bbps", "recharge", "vouchers", "dmt", "aeps"].includes(svc) && on) {
+      if (["bbps", "bbps_bulk", "recharge", "vouchers", "dmt", "aeps"].includes(svc) && on) {
         visibleServiceItems += 1;
       }
     });
@@ -186,8 +415,21 @@
     if (walletChip) walletChip.hidden = !enabled.includes("wallet");
   }
 
-  async function refreshCoreState() {
+  async function refreshCoreState(options = {}) {
     if (!globalThis.PayswapHub) return;
+    const force = Boolean(options && options.force);
+    const now = Date.now();
+    if (
+      !force &&
+      appState.entitlements &&
+      appState.wallet &&
+      coreStateFetchedAt &&
+      now - coreStateFetchedAt < CORE_STATE_TTL_MS
+    ) {
+      applyEntitlements();
+      updateHeaderWallet(appState.wallet);
+      return;
+    }
     const [entRes, walletRes] = await Promise.all([
       globalThis.PayswapHub.entitlements(),
       globalThis.PayswapHub.wallet().catch(() => ({ ok: false })),
@@ -203,12 +445,35 @@
       appState.pgConfigured = Boolean(walletRes.data.pg_configured);
       updateHeaderWallet(walletRes.data.wallet);
     }
+    if ((entRes.ok && entRes.data) || (walletRes && walletRes.ok)) {
+      coreStateFetchedAt = Date.now();
+    }
+  }
+
+  function clearScreenTimers(nextKey) {
+    if (nextKey !== "bulk-bills") {
+      clearTimeout(bulkState.pollTimer);
+      bulkState.pollTimer = null;
+      clearTimeout(bulkState.billerSearchTimer);
+      bulkState.billerSearchTimer = 0;
+    }
+    if (nextKey !== "bills") {
+      clearTimeout(bbpsState.searchTimer);
+      clearTimeout(bbpsPlanTimer);
+      bbpsState.searchTimer = 0;
+      bbpsPlanTimer = 0;
+    }
+    if (nextKey !== "transactions") {
+      clearTimeout(txnSearchTimer);
+      txnSearchTimer = 0;
+    }
   }
 
   function show(name) {
     const allowed = appState.entitlements ? appState.entitlements.enabled_services : null;
     const requested = String(name || "").split("?")[0].split("/")[0] || "home";
-    const key = window.Payswap.mount(view, requested, allowed);
+    const key = window.Payswap.mount(view, requested, allowed, appState.entitlements);
+    clearScreenTimers(key);
     const title = window.Payswap.titles[key] || "Home";
     crumb.textContent = title;
     document.title = `${title} · PaySwap`;
@@ -217,7 +482,8 @@
     backdrop.hidden = true;
     menuBtn.setAttribute("aria-expanded", "false");
     // Keep the user on the same screen across refresh; only rewrite hash when it drifted.
-    if (location.hash !== `#${key}`) history.replaceState(null, "", `#${key}`);
+    // Compare page only — keep #wallet?payu=… until capturePayuReturn runs.
+    if (hashRouteParts().page !== key) history.replaceState(null, "", `#${key}`);
     try {
       sessionStorage.setItem("payswap-route", key);
     } catch (_err) {
@@ -226,9 +492,462 @@
 
     if (key === "home") initHomeScreen();
     else if (key === "bills") initBbpsScreen();
+    else if (key === "bulk-bills") initBulkBillsScreen();
     else if (key === "wallet") initWalletScreen();
     else if (key === "transactions") initTransactionsScreen();
     else if (key === "profile") initProfileScreen();
+  }
+
+  const bulkState = {
+    batchId: "",
+    due: "all",
+    fetch: "all",
+    q: "",
+    pollTimer: null,
+    category: "",
+    categories: [],
+    operators: [],
+    /** @type {Record<string, { op: string, biller_id: string, name: string, category: string, count: number }>} */
+    selected: {},
+    billerSearchTimer: 0,
+  };
+
+  function bulkSelectedList() {
+    return Object.values(bulkState.selected || {});
+  }
+
+  function bulkSelectedTotalRows() {
+    return bulkSelectedList().reduce((sum, item) => sum + Math.max(1, Number(item.count) || 1), 0);
+  }
+
+  function setBulkStatus(msg, tone) {
+    const el = view.querySelector("[data-bulk-status]");
+    if (!el) return;
+    el.hidden = !msg;
+    el.textContent = msg || "";
+    el.className = `preview-result bulk-status${tone ? ` is-${tone}` : ""}`;
+    if (msg) {
+      try {
+        el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      } catch (_err) {
+        /* ignore */
+      }
+    }
+  }
+
+  function persistBulkSelected() {
+    try {
+      sessionStorage.setItem("payswap-bulk-selected", JSON.stringify(bulkState.selected || {}));
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function restoreBulkSelected() {
+    try {
+      const raw = sessionStorage.getItem("payswap-bulk-selected");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        bulkState.selected = parsed;
+      }
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function paintBulkBatch(batch) {
+    if (!batch) return;
+    const set = (sel, text) => {
+      const el = view.querySelector(sel);
+      if (el) el.textContent = text;
+    };
+    set("[data-bulk-stat-rows]", String(batch.row_count || 0));
+    const billerLabel = batch.biller_name || batch.operator_id || "";
+    set(
+      "[data-bulk-stat-file]",
+      billerLabel
+        ? `${billerLabel} · ${batch.source_filename || batch.batch_id || ""}`
+        : batch.source_filename || batch.batch_id || "—",
+    );
+    set("[data-bulk-stat-fetch]", String(batch.fetch_ok || 0));
+    set("[data-bulk-stat-fetch-fail]", `${batch.fetch_fail || 0} failed`);
+    set("[data-bulk-stat-due]", rupee(batch.fetch_due_total || batch.ready_total || "0"));
+    set("[data-bulk-stat-wallet]", `Wallet ${rupee(batch.wallet_available || "0")}`);
+    set("[data-bulk-stat-paid]", String(batch.pay_ok || 0));
+    set("[data-bulk-stat-status]", `${batch.status || "—"} · pipe ${batch.pipe || "—"}`);
+  }
+
+  function syncBulkBillerActions() {
+    const selected = bulkSelectedList();
+    const tmpl = view.querySelector("[data-bulk-template]");
+    const file = view.querySelector("[data-bulk-file]");
+    const uploadLabel = view.querySelector("[data-bulk-upload-label]");
+    const picked = view.querySelector("[data-bulk-biller-picked]");
+    const panel = view.querySelector("[data-bulk-selected]");
+    const totalEl = view.querySelector("[data-bulk-selected-total]");
+    const ready = selected.length > 0 && bulkSelectedTotalRows() > 0;
+    if (tmpl) tmpl.disabled = !ready;
+    // Sheet already has biller_id per row — upload must stay clickable even if selection cleared.
+    if (file) file.disabled = false;
+    if (uploadLabel) uploadLabel.classList.remove("is-disabled");
+    if (picked) {
+      picked.textContent = ready
+        ? `${selected.length} biller${selected.length === 1 ? "" : "s"} · ${bulkSelectedTotalRows()} bill rows`
+        : "No billers selected yet.";
+    }
+    if (panel) panel.hidden = !selected.length;
+    if (totalEl) {
+      totalEl.textContent = ready
+        ? `${bulkSelectedTotalRows()} rows will be in the download (max 500).`
+        : "0 rows will be in the download.";
+    }
+  }
+
+  function paintBulkSelectedRows() {
+    const box = view.querySelector("[data-bulk-selected-rows]");
+    if (!box) return;
+    const selected = bulkSelectedList();
+    if (!selected.length) {
+      box.innerHTML = "";
+      syncBulkBillerActions();
+      return;
+    }
+    box.innerHTML =
+      `<div class="bulk-selected-head" aria-hidden="true"><span>Biller</span><span>Bills</span><span></span></div>` +
+      selected
+        .map(
+          (item) => `<div class="bulk-selected-row" data-bulk-selected-op="${esc(item.op)}">
+          <div>
+            <strong>${esc(item.name || item.op)}</strong>
+            <small>${esc(item.op)}${item.category ? ` · ${esc(item.category)}` : ""}</small>
+          </div>
+          <label class="field">
+            <span class="bulk-count-label">Bills</span>
+            <input type="number" min="1" max="500" step="1" value="${esc(String(item.count || 1))}" data-bulk-count-op="${esc(item.op)}" aria-label="How many bills for ${esc(item.name || item.op)}" />
+          </label>
+          <button type="button" class="btn-icon" data-bulk-remove-op="${esc(item.op)}" aria-label="Remove ${esc(item.name || item.op)}"><span class="mi">close</span></button>
+        </div>`,
+        )
+        .join("");
+    syncBulkBillerActions();
+  }
+
+  function paintBulkBillerList(operators) {
+    const box = view.querySelector("[data-bulk-biller-list]");
+    if (!box) return;
+    const rows = Array.isArray(operators) ? operators : [];
+    if (!rows.length) {
+      box.innerHTML = `<p class="hint">No billers in this category. Try another category or search.</p>`;
+      return;
+    }
+    box.innerHTML = rows
+      .map((op) => {
+        const id = String(op.op || op.biller_id || "");
+        const on = Boolean(bulkState.selected[id]) ? " is-on" : "";
+        return `<button type="button" class="bulk-biller-row${on}" role="option" data-bulk-pick-op="${esc(id)}" aria-selected="${on ? "true" : "false"}">
+          <span><strong>${esc(op.name || id)}</strong><small>${esc(id)}${op.category ? ` · ${esc(op.category)}` : ""}</small></span>
+          <span class="mi" aria-hidden="true">${on ? "check_circle" : "add_circle"}</span>
+        </button>`;
+      })
+      .join("");
+  }
+
+  async function loadBulkBillerCatalogue({ category = "", q = "" } = {}) {
+    const box = view.querySelector("[data-bulk-biller-list]");
+    if (!globalThis.PayswapHub) return;
+    if (box) box.innerHTML = `<p class="hint">Loading billers…</p>`;
+    const res = await globalThis.PayswapHub.bbpsOperators({
+      category: category || undefined,
+      q: q || undefined,
+      limit: 120,
+    });
+    if (!res.ok) {
+      if (box) box.innerHTML = `<p class="hint">${esc(res.error || "Could not load billers.")}</p>`;
+      return;
+    }
+    const cats = res.data.categories || [];
+    if (cats.length) {
+      bulkState.categories = cats;
+      const select = view.querySelector("[data-bulk-category]");
+      if (select && select.options.length <= 1) {
+        select.innerHTML =
+          `<option value="">All categories</option>` +
+          cats.map((c) => `<option value="${esc(c.id || c.name || "")}">${esc(c.name || c.id || "")}</option>`).join("");
+        if (bulkState.category) select.value = bulkState.category;
+      }
+    }
+    bulkState.operators = res.data.operators || [];
+    paintBulkBillerList(bulkState.operators);
+  }
+
+  function paintBulkRows(rows) {
+    const table = view.querySelector("[data-bulk-table]");
+    const empty = view.querySelector("[data-bulk-empty]");
+    const actions = view.querySelector("[data-bulk-actions]");
+    if (!table) return;
+    if (!rows.length) {
+      table.hidden = true;
+      if (empty) empty.hidden = false;
+      if (actions) actions.hidden = !bulkState.batchId;
+      table.innerHTML = "";
+      return;
+    }
+    if (empty) empty.hidden = true;
+    table.hidden = false;
+    if (actions) actions.hidden = false;
+    table.innerHTML = `<table class="desk-table bulk-table"><thead><tr>
+      <th>#</th><th>Biller</th><th>Account</th><th>Due</th><th>Fetch</th><th>Pay</th><th>Ref</th><th>Error</th>
+    </tr></thead><tbody>${rows
+      .map(
+        (r) => `<tr>
+      <td>${esc(String(r.row_no))}</td>
+      <td><strong>${esc(r.biller_name || r.operator_id || "—")}</strong><small>${esc(r.category || "")}</small></td>
+      <td class="mono">${esc(r.account_mask || "—")}</td>
+      <td>${esc(rupee(r.due_amount || "0"))}<small>${esc(r.due_date || r.due_bucket || "")}</small></td>
+      <td><span class="pill">${esc(r.fetch_state || "")}</span></td>
+      <td><span class="pill">${esc(r.pay_state || "")}</span></td>
+      <td class="mono">${r.bbps_reference ? `<a href="#transactions">${esc(r.bbps_reference)}</a>` : "—"}</td>
+      <td>${esc(r.fetch_error || r.pay_error || "")}</td>
+    </tr>`,
+      )
+      .join("")}</tbody></table>`;
+  }
+
+  async function loadBulkDetail(batchId) {
+    if (!globalThis.PayswapHub || !batchId) return;
+    bulkState.batchId = batchId;
+    const params = { limit: 200 };
+    if (bulkState.fetch !== "all") params.fetch_state = bulkState.fetch === "ok" ? "ok" : bulkState.fetch;
+    if (bulkState.due !== "all") params.due_bucket = bulkState.due;
+    if (bulkState.q) params.q = bulkState.q;
+    const res = await globalThis.PayswapHub.bulkBbpsRows(batchId, params);
+    if (!res.ok) {
+      setBulkStatus(res.error || "Could not load batch rows.", "error");
+      return;
+    }
+    paintBulkBatch(res.data.batch || {});
+    paintBulkRows(res.data.rows || []);
+    const st = (res.data.batch && res.data.batch.status) || "";
+    if (["fetching", "paying"].includes(st)) {
+      clearTimeout(bulkState.pollTimer);
+      bulkState.pollTimer = setTimeout(() => loadBulkDetail(batchId), 2500);
+    }
+  }
+
+  async function loadBulkBatchesList() {
+    const box = view.querySelector("[data-bulk-batches]");
+    if (!box || !globalThis.PayswapHub) return;
+    const res = await globalThis.PayswapHub.bulkBbpsBatches();
+    if (!res.ok) {
+      box.innerHTML = `<p class="hint">${esc(res.error || "Could not load batches.")}</p>`;
+      return;
+    }
+    const rows = res.data.batches || [];
+    if (!rows.length) {
+      box.innerHTML = `<p class="hint">No bulk batches yet.</p>`;
+      return;
+    }
+    box.innerHTML = `<ul class="rows">${rows
+      .map(
+        (b) => `<li><button type="button" class="linkish" data-bulk-open="${esc(b.batch_id)}"><strong>${esc(b.biller_name || b.batch_id)}</strong> · ${esc(b.status)} · ${esc(String(b.row_count))} rows · ${esc(b.source_filename || b.batch_id || "")}</button></li>`,
+      )
+      .join("")}</ul>`;
+    box.querySelectorAll("[data-bulk-open]").forEach((btn) => {
+      btn.addEventListener("click", () => loadBulkDetail(btn.dataset.bulkOpen));
+    });
+  }
+
+  async function initBulkBillsScreen() {
+    await refreshCoreState();
+    clearTimeout(bulkState.pollTimer);
+    restoreBulkSelected();
+    bulkState.category = "";
+    paintBulkSelectedRows();
+    syncBulkBillerActions();
+
+    view.querySelector("[data-bulk-category]")?.addEventListener("change", (ev) => {
+      bulkState.category = ev.target.value || "";
+      const q = view.querySelector("[data-bulk-biller-q]")?.value || "";
+      loadBulkBillerCatalogue({ category: bulkState.category, q });
+    });
+    view.querySelector("[data-bulk-biller-q]")?.addEventListener("input", (ev) => {
+      clearTimeout(bulkState.billerSearchTimer);
+      const q = ev.target.value.trim();
+      bulkState.billerSearchTimer = setTimeout(() => {
+        loadBulkBillerCatalogue({ category: bulkState.category, q });
+      }, 220);
+    });
+    view.querySelector("[data-bulk-biller-list]")?.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-bulk-pick-op]");
+      if (!btn) return;
+      const id = btn.dataset.bulkPickOp || "";
+      if (!id) return;
+      if (bulkState.selected[id]) {
+        delete bulkState.selected[id];
+      } else {
+        const op = (bulkState.operators || []).find((row) => String(row.op || row.biller_id || "") === id);
+        if (!op) return;
+        bulkState.selected[id] = {
+          op: String(op.op || id),
+          biller_id: String(op.biller_id || op.op || id),
+          name: String(op.name || id),
+          category: String(op.category || ""),
+          count: 1,
+        };
+      }
+      paintBulkBillerList(bulkState.operators);
+      paintBulkSelectedRows();
+      persistBulkSelected();
+      const n = bulkSelectedList().length;
+      setBulkStatus(
+        n
+          ? `${n} biller${n === 1 ? "" : "s"} selected · set bill counts, then Download sheet.`
+          : "",
+        n ? "ok" : "",
+      );
+    });
+    view.querySelector("[data-bulk-selected]")?.addEventListener("input", (ev) => {
+      const input = ev.target.closest("[data-bulk-count-op]");
+      if (!input) return;
+      const id = input.dataset.bulkCountOp || "";
+      if (!bulkState.selected[id]) return;
+      let count = parseInt(input.value, 10);
+      if (!Number.isFinite(count) || count < 1) count = 1;
+      if (count > 500) count = 500;
+      bulkState.selected[id].count = count;
+      persistBulkSelected();
+      syncBulkBillerActions();
+    });
+    view.querySelector("[data-bulk-selected]")?.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-bulk-remove-op]");
+      if (!btn) return;
+      const id = btn.dataset.bulkRemoveOp || "";
+      delete bulkState.selected[id];
+      persistBulkSelected();
+      paintBulkBillerList(bulkState.operators);
+      paintBulkSelectedRows();
+    });
+
+    view.querySelector("[data-bulk-template]")?.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      const selected = bulkSelectedList();
+      if (!selected.length) return setBulkStatus("Select at least one biller first.", "error");
+      const billers = selected.map((item) => ({
+        op: item.op,
+        biller_id: item.biller_id,
+        count: Math.max(1, Math.min(500, Number(item.count) || 1)),
+      }));
+      const total = billers.reduce((sum, item) => sum + item.count, 0);
+      if (total > 500) return setBulkStatus("Total bill rows cannot exceed 500.", "error");
+      const btn = view.querySelector("[data-bulk-template]");
+      if (btn) btn.disabled = true;
+      setBulkStatus("Downloading sheet…", "");
+      try {
+        const res = await globalThis.PayswapHub.downloadBulkBbpsTemplate({ billers });
+        if (!res.ok) {
+          setBulkStatus(res.error || "Sheet download failed.", "error");
+          return;
+        }
+        setBulkStatus(
+          `Sheet ready · ${billers.length} biller${billers.length === 1 ? "" : "s"} · ${total} rows. Fill consumer numbers, then upload.`,
+          "ok",
+        );
+      } catch (err) {
+        setBulkStatus((err && err.message) || "Sheet download failed.", "error");
+      } finally {
+        syncBulkBillerActions();
+      }
+    });
+    view.querySelector("[data-bulk-file]")?.addEventListener("change", async (ev) => {
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+      setBulkStatus("Uploading…", "");
+      try {
+        // Sheet carries biller_id per row; do not lock to a single operator.
+        const res = await globalThis.PayswapHub.uploadBulkBbps(file, {});
+        ev.target.value = "";
+        if (!res.ok) {
+          setBulkStatus(res.error || "Upload failed. Fill consumer_number in the sheet and try again.", "error");
+          return;
+        }
+        const rows = Number(res.data.row_count || 0);
+        const label = res.data.biller_name || res.data.source_filename || res.data.batch_id || "batch";
+        setBulkStatus(
+          rows
+            ? `Uploaded ${rows} row${rows === 1 ? "" : "s"} · ${label}.`
+            : `Batch ${res.data.batch_id || ""} uploaded · ${label}.`,
+          "ok",
+        );
+        paintBulkBatch(res.data);
+        await loadBulkDetail(res.data.batch_id);
+        loadBulkBatchesList();
+      } catch (err) {
+        ev.target.value = "";
+        setBulkStatus((err && err.message) || "Upload failed.", "error");
+      }
+    });
+    view.querySelectorAll("[data-bulk-due]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        bulkState.due = btn.dataset.bulkDue || "all";
+        view.querySelectorAll("[data-bulk-due]").forEach((n) => n.classList.toggle("is-on", n === btn));
+        if (bulkState.batchId) loadBulkDetail(bulkState.batchId);
+      });
+    });
+    view.querySelectorAll("[data-bulk-fetch]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        bulkState.fetch = btn.dataset.bulkFetch || "all";
+        view.querySelectorAll("[data-bulk-fetch]").forEach((n) => n.classList.toggle("is-on", n === btn));
+        if (bulkState.batchId) loadBulkDetail(bulkState.batchId);
+      });
+    });
+    view.querySelector("[data-bulk-q]")?.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter") return;
+      bulkState.q = ev.target.value || "";
+      if (bulkState.batchId) loadBulkDetail(bulkState.batchId);
+    });
+    view.querySelector("[data-bulk-refetch]")?.addEventListener("click", async () => {
+      if (!bulkState.batchId) return;
+      const res = await globalThis.PayswapHub.refetchBulkBbps(bulkState.batchId);
+      if (!res.ok) return setBulkStatus(res.error || "Re-fetch failed.", "error");
+      setBulkStatus("Re-fetch queued.", "ok");
+      loadBulkDetail(bulkState.batchId);
+    });
+    view.querySelector("[data-bulk-export]")?.addEventListener("click", async () => {
+      if (!bulkState.batchId) return;
+      setBulkStatus("Exporting CSV…", "");
+      const res = await globalThis.PayswapHub.downloadBulkBbpsExport(bulkState.batchId);
+      if (!res.ok) return setBulkStatus(res.error || "Export failed.", "error");
+      setBulkStatus("CSV exported.", "ok");
+    });
+    view.querySelector("[data-bulk-cancel]")?.addEventListener("click", async () => {
+      if (!bulkState.batchId) return;
+      const res = await globalThis.PayswapHub.cancelBulkBbps(bulkState.batchId);
+      if (!res.ok) return setBulkStatus(res.error || "Cancel failed.", "error");
+      setBulkStatus("Batch cancelled.", "ok");
+      loadBulkDetail(bulkState.batchId);
+      loadBulkBatchesList();
+    });
+    view.querySelector("[data-bulk-proceed]")?.addEventListener("click", async () => {
+      if (!bulkState.batchId) return;
+      const pin = view.querySelector("[data-bulk-pin]")?.value || "";
+      if (!pin) return setBulkStatus("Enter wallet PIN to proceed.", "error");
+      setBulkStatus("Paying ready rows…", "");
+      const res = await globalThis.PayswapHub.proceedBulkBbps(bulkState.batchId, { wallet_pin: pin });
+      if (!res.ok) return setBulkStatus(res.error || "Proceed failed.", "error");
+      setBulkStatus(`Pay finished · status ${res.data.status}.`, "ok");
+      loadBulkDetail(bulkState.batchId);
+      loadBulkBatchesList();
+      refreshCoreState({ force: true });
+    });
+    view.querySelector("[data-bulk-refresh]")?.addEventListener("click", () => {
+      loadBulkBatchesList();
+      if (bulkState.batchId) loadBulkDetail(bulkState.batchId);
+    });
+    await Promise.all([
+      loadBulkBatchesList(),
+      loadBulkBillerCatalogue({ category: "", q: "" }),
+    ]);
   }
 
   async function initHomeScreen() {
@@ -286,16 +1005,19 @@
       if (tilesBox) {
         const defs = [
           { key: "bbps", href: "#bills", icon: "receipt_long", title: "Bill Pay (BBPS)", desc: "Fetch & settle live Bharat Connect bills." },
+          { key: "bbps_bulk", href: "#bulk-bills", icon: "upload_file", title: "Bulk bills", desc: "Excel upload, fetch dues, wallet auto-pay." },
           { key: "wallet", href: "#wallet", icon: "account_balance_wallet", title: "Wallet & Float", desc: "Check balance, ledger, and submit UTR top-up." },
           { key: "transactions", href: "#transactions", icon: "history", title: "Transactions", desc: "Live BBPS history, receipts, and status sync." },
           { key: "profile", href: "#profile", icon: "person", title: "Profile & KYC", desc: "Manage outlet profile, Wallet PIN, and sessions." },
-          { key: "support", href: "#support", icon: "support_agent", title: "Support", desc: "Raise and track support tickets." },
           { key: "vouchers", href: "#vouchers", icon: "confirmation_number", title: "Vouchers", desc: "Order enabled brand vouchers." },
           { key: "recharge", href: "#recharge", icon: "smartphone", title: "Recharges", desc: "Mobile and DTH recharges." },
           { key: "dmt", href: "#dmt", icon: "send", title: "DMT", desc: "Domestic money transfer." },
           { key: "aeps", href: "#aeps", icon: "fingerprint", title: "AEPS", desc: "Aadhaar cash services." },
         ];
-        const allowedTiles = defs.filter((item) => enabled.includes(item.key));
+        const allowedTiles = defs.filter((item) => {
+          if (item.key === "bbps_bulk") return enabled.includes("bbps") && Boolean(ent.bbps_bulk_enabled);
+          return enabled.includes(item.key);
+        });
         tilesBox.innerHTML = allowedTiles.length
           ? allowedTiles
               .map(
@@ -437,13 +1159,70 @@
     form.querySelector("[name='account']")?.focus();
   }
 
+  function visibleBbpsAdParams(op) {
+    return (op && Array.isArray(op.ad_params) ? op.ad_params : []).filter((param) => {
+      if (!param || param.ui_hidden || param.hidden) return false;
+      // Optional tags stay off the counter — Mobikwik accepts the bill without them.
+      if (param.optional) return false;
+      return true;
+    });
+  }
+
   function collectAdParams(form) {
     const out = {};
+    const op = bbpsState.operator;
+    // Fixed bank / Cir codes never appear as inputs; inject catalogue defaults.
+    (op && Array.isArray(op.ad_params) ? op.ad_params : []).forEach((param) => {
+      if (!param || !param.ui_hidden) return;
+      const key = String(param.key || "").trim();
+      const value = String(param.default_value || "").trim();
+      if (key && value) out[key] = value;
+    });
     form.querySelectorAll("[data-bbps-ad]").forEach((input) => {
       const value = String(input.value || "").trim();
       if (value) out[input.dataset.bbpsAd] = value;
     });
     return out;
+  }
+
+  function paintBbpsAdParams(adBox, op) {
+    if (!adBox) return;
+    adBox.replaceChildren();
+    visibleBbpsAdParams(op).forEach((param) => {
+      const label = document.createElement("label");
+      label.className = "field";
+      const title = document.createElement("span");
+      title.textContent = param.label || param.key;
+      label.append(title);
+      const options = Array.isArray(param.options) ? param.options : [];
+      if (options.length) {
+        const select = document.createElement("select");
+        select.dataset.bbpsAd = param.key;
+        select.required = !param.optional;
+        const blank = document.createElement("option");
+        blank.value = "";
+        blank.textContent = "Select";
+        select.append(blank);
+        options.forEach((opt) => {
+          const row = document.createElement("option");
+          row.value = String(opt.value || "");
+          row.textContent = String(opt.label || opt.value || "");
+          if (param.default_value && String(param.default_value) === row.value) row.selected = true;
+          select.append(row);
+        });
+        label.append(select);
+      } else {
+        const input = document.createElement("input");
+        input.dataset.bbpsAd = param.key;
+        input.value = param.default_value || "";
+        input.placeholder = "Required";
+        input.required = !param.optional;
+        input.autocomplete = "off";
+        if (param.regex) input.title = `Format: ${param.regex}`;
+        label.append(input);
+      }
+      adBox.append(label);
+    });
   }
 
   function ensureBbpsMogo() {
@@ -913,6 +1692,8 @@
         img.src = op.icon;
         img.alt = "";
         img.loading = "lazy";
+        img.referrerPolicy = "no-referrer";
+        img.decoding = "async";
         img.onerror = () => {
           img.remove();
           glyph.hidden = false;
@@ -1194,6 +1975,7 @@
     }
     if (logo) {
       logo.hidden = !op.icon;
+      logo.referrerPolicy = "no-referrer";
       logo.src = op.icon || "";
       logo.onerror = () => {
         logo.hidden = true;
@@ -1205,43 +1987,32 @@
       op.bill_fetch === "MANDATORY" ? "Bill fetch required" : op.bill_fetch === "OPTIONAL" ? "Bill fetch optional" : "Direct payment";
     form.querySelector("[data-bill-biller]").textContent = `${op.category_label} · ${op.biller_id || "op " + op.op} · ${fetchLabel}`;
 
-    const acctLabel = form.querySelector("[data-bbps-account-label]");
-    if (acctLabel) acctLabel.textContent = (op.primary_param && op.primary_param.label) || "Consumer number";
-
     const prepaidLike = isPrepaidLike(op);
+    const acctLabel = form.querySelector("[data-bbps-account-label]");
+    if (acctLabel) acctLabel.textContent = prepaidLike ? "Mobile number" : (op.primary_param && op.primary_param.label) || "Consumer number";
+    if (form.account) {
+      form.account.placeholder = prepaidLike ? "10-digit mobile number" : "Enter consumer number";
+      form.account.inputMode = prepaidLike ? "numeric" : "text";
+    }
+
     const cirSelectWrap = form.querySelector("[data-bbps-cir-select-wrap]");
     const cirWrap = form.querySelector("[data-bbps-cir-wrap]");
     const cirSelect = form.querySelector("[data-bbps-circle]");
     const cirManual = form.querySelector("[data-bbps-circle-manual]");
+    // Telecom circle picker only for prepaid/DTH. Fixed Cir_Id (FASTag/CC) stays hidden.
     if (cirSelectWrap) cirSelectWrap.hidden = !prepaidLike;
-    if (cirWrap) cirWrap.hidden = prepaidLike || !op.cir_required;
+    if (cirWrap) cirWrap.hidden = true;
     if (cirSelect) {
-      cirSelect.required = prepaidLike;
+      cirSelect.required = false;
       void fillBbpsCircleSelect(cirSelect, op.circle_default || "");
     }
     if (cirManual) {
-      cirManual.required = !prepaidLike && Boolean(op.cir_required);
+      cirManual.required = false;
       cirManual.value = op.circle_default || "";
     }
     clearBbpsPlans(form);
 
-    const adBox = form.querySelector("[data-bbps-ad-params]");
-    if (adBox) {
-      adBox.replaceChildren();
-      (op.ad_params || []).forEach((param) => {
-        const label = document.createElement("label");
-        label.className = "field";
-        label.textContent = param.label || param.key;
-        const input = document.createElement("input");
-        input.dataset.bbpsAd = param.key;
-        input.value = param.default_value || "";
-        input.placeholder = param.optional ? "Optional" : "Required";
-        input.required = !param.optional;
-        input.autocomplete = "off";
-        label.append(input);
-        adBox.append(label);
-      });
-    }
+    paintBbpsAdParams(form.querySelector("[data-bbps-ad-params]"), op);
 
     const fetchBtn = form.querySelector("[data-bbps-fetch]");
     if (fetchBtn) {
@@ -1257,7 +2028,7 @@
     if (fetchNote) {
       fetchNote.textContent = bbpsState.configured
         ? prepaidLike
-          ? "Enter the mobile number, pick the telecom circle, then load plans."
+          ? "Choose the operator and circle, then enter the mobile number. One plan request goes to Mobikwik."
           : op.bill_fetch === "NOT_REQUIRED"
             ? "This biller accepts a direct payment amount."
             : "Fetch the bill before collecting payment."
@@ -1277,6 +2048,13 @@
       });
     }
 
+    if (!form.dataset.planWatch) {
+      form.dataset.planWatch = "1";
+      form.account?.addEventListener("input", () => scheduleBbpsPlans(form));
+      form.querySelector("[data-bbps-circle]")?.addEventListener("change", () => {
+        if (isPrepaidLike(bbpsState.operator)) scheduleBbpsPlans(form);
+      });
+    }
     syncBbpsRailControls(form);
     syncBbpsPayLabel(form);
     const billBox = form.querySelector("[data-bbps-bill-box]");
@@ -1293,9 +2071,12 @@
 
   function readBbpsCircle(form) {
     if (!form) return "";
-    if (isPrepaidLike(bbpsState.operator)) {
+    const op = bbpsState.operator;
+    if (isPrepaidLike(op)) {
       return String(form.querySelector("[data-bbps-circle]")?.value || "").trim();
     }
+    // FASTag / credit-card Cir_Id is a fixed catalogue code — never typed by retailer.
+    if (op && op.circle_default) return String(op.circle_default).trim();
     return String(form.querySelector("[data-bbps-circle-manual]")?.value || form.circle?.value || "").trim();
   }
 
@@ -1405,8 +2186,33 @@
     if (empty) empty.hidden = filtered.length > 0;
   }
 
+  let bbpsPlanTimer = 0;
+  let bbpsPlanFlight = "";
+  let bbpsPlanKey = "";
+
+  function bbpsPlanRequestKey(form, mobile, circle) {
+    const op = bbpsState.operator ? bbpsState.operator.op || bbpsState.operator.biller_id : "";
+    return `${op}|${circle}|${mobile}`;
+  }
+
+  function scheduleBbpsPlans(form) {
+    window.clearTimeout(bbpsPlanTimer);
+    if (!form || !isPrepaidLike(bbpsState.operator)) return;
+    const mobile = String(form.account?.value || "").replace(/\D/g, "").slice(-10);
+    const circle = readBbpsCircle(form);
+    if (!/^[6-9]\d{9}$/.test(mobile)) {
+      clearBbpsPlans(form);
+      bbpsPlanKey = "";
+      return;
+    }
+    if (!circle) return;
+    const key = bbpsPlanRequestKey(form, mobile, circle);
+    if (key === bbpsPlanKey && (bbpsState.plans || []).length) return;
+    bbpsPlanTimer = window.setTimeout(() => loadBbpsPlans(form), 800);
+  }
+
   async function loadBbpsPlans(form) {
-    if (!globalThis.PayswapHub?.bbpsPlans || !bbpsState.operator) return;
+    if (!globalThis.PayswapHub?.bbpsPlans || !bbpsState.operator || !form) return;
     const account = String(form.account?.value || "").trim();
     const circle = readBbpsCircle(form);
     const statusBox = form.querySelector("[data-bbps-status]");
@@ -1416,35 +2222,50 @@
       return;
     }
     if (!circle) {
-      showBbpsStatus(statusBox, "Select a telecom circle to load plans.", "error", { sound: true });
+      showBbpsStatus(statusBox, "Select the telecom circle. Mobikwik needs the circle before plans.", "pending");
       return;
     }
+    const key = bbpsPlanRequestKey(form, mobile, circle);
+    if (bbpsPlanFlight) return;
+    if (key === bbpsPlanKey && (bbpsState.plans || []).length) return;
+    bbpsPlanFlight = key;
     const plansBtn = form.querySelector("[data-bbps-load-plans]");
     if (plansBtn) plansBtn.disabled = true;
     showBbpsStatus(statusBox, "Loading recharge plans…", "pending");
-    const result = await globalThis.PayswapHub.bbpsPlans({
-      biller: bbpsState.operator.biller_id || bbpsState.operator.op,
-      account,
-      circle,
-    });
-    if (plansBtn) plansBtn.disabled = false;
-    if (!result.ok) {
+    let result;
+    try {
+      result = await globalThis.PayswapHub.bbpsPlans({
+        biller: bbpsState.operator.biller_id || bbpsState.operator.op,
+        account: mobile,
+        circle,
+      });
+    } finally {
+      bbpsPlanFlight = "";
+      if (plansBtn) plansBtn.disabled = false;
+    }
+    if (!result || !result.ok) {
       handleSessionRejection(result);
-      showBbpsStatus(statusBox, result.error || "Could not load plans.", "error", { sound: true });
+      showBbpsStatus(statusBox, (result && result.error) || "Plans could not be loaded. Try again.", "error", {
+        title: "Plans unavailable",
+        sound: true,
+      });
       clearBbpsPlans(form);
       return;
     }
+    const resolvedCircle = String(result.data.circle || circle || "");
     if (Array.isArray(result.data.circles) && result.data.circles.length) {
       bbpsState.circles = result.data.circles;
-      fillBbpsCircleSelect(form.querySelector("[data-bbps-circle]"), circle);
     }
+    await fillBbpsCircleSelect(form.querySelector("[data-bbps-circle]"), resolvedCircle);
+    bbpsPlanKey = key;
     bbpsState.plans = Array.isArray(result.data.plans) ? result.data.plans : [];
     bbpsState.planCategory = "all";
     renderBbpsPlans(form);
+    const who = [result.data.operator_name, result.data.circle_label].filter(Boolean).join(" · ");
     if (!bbpsState.plans.length) {
-      showBbpsStatus(statusBox, "No plans returned for this circle. You can still enter an amount.", "pending");
+      showBbpsStatus(statusBox, who ? `No plans for ${who}. You can still enter an amount.` : "No plans returned. You can still enter an amount.", "pending");
     } else {
-      showBbpsStatus(statusBox, `${bbpsState.plans.length} plans loaded. Pick one or enter amount.`, "ok");
+      showBbpsStatus(statusBox, `${bbpsState.plans.length} plans${who ? ` for ${who}` : ""}. Pick one or enter an amount.`, "ok");
     }
     renderBbpsSteps(4);
   }
@@ -1502,8 +2323,18 @@
       handleSessionRejection(res);
       return;
     }
-    const { wallet, ledger, topup_requests: topups, entitlements, pg_configured: pgReady, commission } = res.data;
+    const {
+      wallet,
+      ledger,
+      topup_requests: topups,
+      pg_orders: pgOrders,
+      entitlements,
+      pg_configured: pgReady,
+      pg_provider: pgProvider,
+      commission,
+    } = res.data;
     appState.pgConfigured = Boolean(pgReady);
+    appState.pgProvider = String(pgProvider || "both").toLowerCase();
     appState.walletLedger = Array.isArray(ledger) ? ledger : [];
     updateHeaderWallet(wallet);
 
@@ -1544,8 +2375,46 @@
       const pgHint = pgForm.querySelector("[data-w-pg-hint]");
       if (pgHint) {
         pgHint.textContent = pgReady
-          ? "Instant wallet load via Cashfree Payment Gateway."
+          ? (appState.pgProvider === "payu"
+              ? "Instant wallet load via PayU Hosted Checkout."
+              : appState.pgProvider === "cashfree"
+                ? "Instant wallet load via Cashfree Payment Gateway."
+                : "Instant wallet load via PayU or Cashfree (admin PG provider policy).")
           : "PG top-up is enabled on your account, waiting for gateway credentials on server.";
+      }
+    }
+
+    const pgOrdersBox = view.querySelector("[data-w-pg-orders]");
+    const pgOrdersCount = view.querySelector("[data-w-pg-orders-count]");
+    if (pgOrdersCount) pgOrdersCount.textContent = pgOrders && pgOrders.length ? `${pgOrders.length} recent` : "";
+    if (pgOrdersBox) {
+      if (!pgOrders || !pgOrders.length) {
+        pgOrdersBox.innerHTML = `<p class="hint">No PG top-up orders yet.</p>`;
+      } else {
+        pgOrdersBox.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Order</th><th>Provider</th><th class="num">Amount</th><th>Status</th><th>Created</th><th>Updated</th><th></th></tr></thead><tbody>${pgOrders
+          .map((p) => {
+            const canPay = p.status === "created" && (p.checkout_url || p.payment_session_id);
+            const actions = [
+              canPay
+                ? `<button type="button" class="btn xs yellow" data-cf-open-order="${esc(p.pg_order_id)}" data-cf-checkout="${esc(p.checkout_url || "")}" data-cf-session="${esc(p.payment_session_id || "")}">Pay now</button>`
+                : "",
+              p.status === "created"
+                ? `<button type="button" class="btn xs" data-pg-verify="${esc(p.pg_order_id)}">Verify</button>`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return `<tr>
+              <td><strong class="mono">${esc(p.pg_order_id)}</strong></td>
+              <td>${esc(p.provider || "—")}</td>
+              <td class="num">${esc(rupee(p.amount))}</td>
+              <td><span class="pill ${statePillClass(p.status)}">${esc(p.status)}</span>${p.paid_at ? `<br><small>Paid ${esc(formatDateTime(p.paid_at))}</small>` : ""}</td>
+              <td>${esc(formatDateTime(p.created_at))}</td>
+              <td>${esc(formatDateTime(p.updated_at))}</td>
+              <td class="num">${actions || "—"}</td>
+            </tr>`;
+          })
+          .join("")}</tbody></table></div>`;
       }
     }
 
@@ -2043,7 +2912,10 @@
       bbpsFetch.disabled = false;
       if (!result.ok) {
         handleSessionRejection(result);
-        showBbpsStatus(statusBox, `Bill fetch failed: ${result.error}`, "error", { sound: true });
+        showBbpsStatus(statusBox, result.error || "This bill could not be fetched. Check the account and try again.", "error", {
+          title: "Bill fetch failed",
+          sound: true,
+        });
         return;
       }
       const bill = result.data.bill || {};
@@ -2096,7 +2968,10 @@
         const printBtn = form.querySelector("[data-bbps-print-receipt]");
         if (printBtn) printBtn.hidden = false;
       } else {
-        showBbpsStatus(statusBox, `Status check failed: ${result.error}`, "error", { sound: true });
+        showBbpsStatus(statusBox, result.error || "Status could not be checked. Try again.", "error", {
+          title: "Status check failed",
+          sound: true,
+        });
       }
       if (result.ok && result.data.wallet) updateHeaderWallet(result.data.wallet);
       return;
@@ -2125,10 +3000,28 @@
         if (tone === "ok" || tone === "error") playBbpsOutcome(tone);
       } else {
         outBox.className = "bbps-lookup-box txn-lookup-box is-error";
-        outBox.textContent = `Status check failed: ${result.error}`;
+        outBox.textContent = result.error || "Status could not be checked. Try again.";
         playBbpsOutcome("error");
       }
       if (result.ok && result.data.wallet) updateHeaderWallet(result.data.wallet);
+      return;
+    }
+
+    const cfRetry = event.target.closest("[data-cf-retry-session]");
+    if (cfRetry) {
+      openCashfreeCheckout({
+        payment_session_id: cfRetry.dataset.cfRetrySession,
+        cashfree_mode: cfRetry.dataset.cfMode || "sandbox",
+      });
+      return;
+    }
+
+    const cfOpenOrder = event.target.closest("[data-cf-open-order]");
+    if (cfOpenOrder) {
+      openCashfreeCheckout({
+        checkout_url: cfOpenOrder.dataset.cfCheckout || "",
+        payment_session_id: cfOpenOrder.dataset.cfSession || "",
+      });
       return;
     }
 
@@ -2137,28 +3030,59 @@
       pgVerifyBtn.disabled = true;
       const orderId = pgVerifyBtn.dataset.pgVerify;
       primeBbpsAudio();
-      const res = await globalThis.PayswapHub.verifyPgOrder(orderId);
+      const res = await globalThis.PayswapHub.verifyPgOrder(orderId, crypto.randomUUID());
       pgVerifyBtn.disabled = false;
-      const box = pgVerifyBtn.closest(".receipt");
+      const box = pgVerifyBtn.closest(".receipt") || pgVerifyBtn.closest("[data-w-pg-box]") || pgVerifyBtn.parentElement;
       if (res.ok) {
         if (res.data.wallet) updateHeaderWallet(res.data.wallet);
-        const msg = document.createElement("p");
-        msg.className = "hint";
-        msg.textContent = `Order ${orderId} · status: ${res.data.status}${res.data.reference ? " · BBPS ref " + res.data.reference + " (" + res.data.state + ")" : ""}`;
-        box.append(msg);
-        if (res.data.state === "success" || res.data.status === "paid") {
+        if (
+          res.data.status !== "paid" &&
+          res.data.provider === "cashfree" &&
+          (res.data.checkout_url || res.data.payment_session_id)
+        ) {
+          if (box) {
+            const msg = document.createElement("p");
+            msg.className = "hint";
+            msg.textContent = `Order ${orderId} still unpaid (${res.data.gateway_status || res.data.status}). Opening Cashfree…`;
+            box.append(msg);
+          }
+          openCashfreeCheckout(res.data);
+          return;
+        }
+        if (box) {
+          const msg = document.createElement("p");
+          msg.className = "hint";
+          msg.textContent = `Order ${orderId} · status: ${res.data.status}${res.data.reference ? " · BBPS ref " + res.data.reference + " (" + res.data.state + ")" : ""}`;
+          box.append(msg);
+        }
+        if (res.data.state === "success") {
           celebrateBbpsSuccess({
             amount: res.data.amount || "",
             reference: res.data.reference || orderId,
             biller: bbpsState.operator?.name || "",
           });
+        } else if (res.data.status === "paid") {
+          showPgOutcome({
+            ok: true,
+            amount: res.data.amount || "",
+            orderId,
+            detail: "Top-up settled on your wallet.",
+          });
+        } else if (res.data.status === "failed" || res.data.state === "failed") {
+          showPgOutcome({
+            ok: false,
+            orderId,
+            detail: "Gateway reported a failed or cancelled payment.",
+          });
         }
         if (location.hash === "#wallet") initWalletScreen();
       } else {
-        const msg = document.createElement("p");
-        msg.className = "error";
-        msg.textContent = res.error || "Verification failed.";
-        box.append(msg);
+        if (box) {
+          const msg = document.createElement("p");
+          msg.className = "error";
+          msg.textContent = res.error || "Verification failed.";
+          box.append(msg);
+        }
       }
       return;
     }
@@ -2188,8 +3112,16 @@
     const pgVerifyRow = event.target.closest("[data-pg-verify-row]");
     if (pgVerifyRow) {
       pgVerifyRow.disabled = true;
-      const res = await globalThis.PayswapHub.verifyPgOrder(pgVerifyRow.dataset.pgVerifyRow);
+      const res = await globalThis.PayswapHub.verifyPgOrder(pgVerifyRow.dataset.pgVerifyRow, crypto.randomUUID());
       pgVerifyRow.disabled = false;
+      if (
+        res.ok &&
+        res.data.status !== "paid" &&
+        res.data.provider === "cashfree" &&
+        res.data.payment_session_id
+      ) {
+        openCashfreeCheckout(res.data);
+      }
       if (res.ok && res.data.wallet) updateHeaderWallet(res.data.wallet);
       await initTransactionsScreen();
       return;
@@ -2296,8 +3228,8 @@
     }
     if (field.matches("[data-txn-q]")) {
       appState.txnQuery = field.value.trim();
-      clearTimeout(bbpsState.searchTimer);
-      bbpsState.searchTimer = setTimeout(() => initTransactionsScreen(), 220);
+      clearTimeout(txnSearchTimer);
+      txnSearchTimer = setTimeout(() => initTransactionsScreen(), 220);
     }
     if (field.closest("[data-bill-form]")) {
       sessionStorage.removeItem("payswap-bbps-attempt");
@@ -2391,6 +3323,22 @@
       if (result.ok) {
         if (result.data.wallet) updateHeaderWallet(result.data.wallet);
         if (result.data.payment_channel === "pg") {
+          if (result.data.provider === "payu" && result.data.action && result.data.params) {
+            showBbpsStatus(statusBox, `Redirecting to PayU for ${rupee(result.data.amount)}…`, "pending");
+            if (!submitPayuHostedCheckout(result.data)) {
+              showBbpsStatus(statusBox, "Could not open PayU checkout.", "error", { sound: true });
+              submitBtn.disabled = false;
+            }
+            return;
+          }
+          if (result.data.provider === "cashfree" && (result.data.checkout_url || result.data.payment_session_id)) {
+            showBbpsStatus(statusBox, `Redirecting to Cashfree for ${rupee(result.data.amount)}…`, "pending");
+            if (!openCashfreeCheckout(result.data)) {
+              showBbpsStatus(statusBox, "Could not open Cashfree checkout. Hard-refresh and retry.", "error", { sound: true });
+              submitBtn.disabled = false;
+            }
+            return;
+          }
           showBbpsStatus(statusBox, `PG order ${result.data.pg_order_id} created for ${rupee(result.data.amount)}. Complete payment on gateway then verify below.`, "pending");
           setBbpsPayLocked(form, true, {
             title: "Checkout started",
@@ -2488,7 +3436,10 @@
         }
       } else {
         handleSessionRejection(result);
-        showBbpsStatus(statusBox, `Bill payment failed: ${result.error}`, "error", { sound: true });
+        showBbpsStatus(statusBox, result.error || "The payment could not be completed. Try again.", "error", {
+          title: "Payment failed",
+          sound: true,
+        });
         setBbpsPayLocked(form, false);
         if (payReceipt) {
           renderBbpsComplianceReceipt(payReceipt, {
@@ -2550,13 +3501,35 @@
       );
       btn.disabled = false;
       if (res.ok) {
+        if (res.data.provider === "payu" && res.data.action && res.data.params) {
+          statusEl.textContent = `Redirecting to PayU for order ${res.data.pg_order_id}…`;
+          if (!submitPayuHostedCheckout(res.data)) {
+            statusEl.textContent = "Could not open PayU checkout.";
+          }
+          return;
+        }
+        if (res.data.provider === "cashfree" && (res.data.checkout_url || res.data.payment_session_id)) {
+          statusEl.textContent = `Redirecting to Cashfree for order ${res.data.pg_order_id}…`;
+          if (!openCashfreeCheckout(res.data)) {
+            statusEl.textContent = "Could not open Cashfree. Use Pay now below.";
+            if (pgBox) {
+              pgBox.hidden = false;
+              pgBox.innerHTML = `<p class="kicker">PG Wallet Top-up</p>
+                <div class="slip-row"><span>Order ID</span><strong>${esc(res.data.pg_order_id)}</strong></div>
+                <div class="slip-row"><span>Amount</span><strong>${esc(rupee(res.data.amount))}</strong></div>
+                ${res.data.checkout_url ? `<a class="btn yellow" href="${esc(res.data.checkout_url)}" rel="noopener">Open Cashfree</a>` : ""}
+                <button class="btn" type="button" data-pg-verify="${esc(res.data.pg_order_id)}">Verify payment</button>`;
+            }
+          }
+          return;
+        }
         statusEl.textContent = `PG order ${res.data.pg_order_id} created.`;
         if (pgBox) {
           pgBox.hidden = false;
           pgBox.innerHTML = `<p class="kicker">PG Wallet Top-up</p>
             <div class="slip-row"><span>Order ID</span><strong>${esc(res.data.pg_order_id)}</strong></div>
             <div class="slip-row"><span>Amount</span><strong>${esc(rupee(res.data.amount))}</strong></div>
-            ${res.data.checkout_url ? `<a class="btn yellow" href="${esc(res.data.checkout_url)}" target="_blank" rel="noopener">Pay Now</a>` : ""}
+            ${res.data.checkout_url ? `<a class="btn yellow" href="${esc(res.data.checkout_url)}" rel="noopener">Pay Now</a>` : ""}
             <button class="btn" type="button" data-pg-verify="${esc(res.data.pg_order_id)}">Verify payment</button>`;
         }
       } else {
@@ -2627,7 +3600,7 @@
       if (result.ok || result.code === "idempotency_conflict") sessionStorage.removeItem(keyName);
       status.textContent = result.ok
         ? `Order ${result.data.reference} recorded.`
-        : `Order failed: ${result.error}`;
+        : result.error || "The order could not be placed. Try again.";
       button.disabled = false;
     }
   });
@@ -2686,6 +3659,8 @@
     }
     await refreshCoreState();
     route();
+    resumePayuReturn(takeStashedPayuReturn() || capturePayuReturn());
+    resumeCashfreeReturn();
   }
 
   document.getElementById("auth-login").addEventListener("submit", async (event) => {
@@ -2770,6 +3745,13 @@
     const jump = event.target.closest("[data-gate-show]");
     if (jump) showGate(jump.dataset.gateShow);
   });
+
+  // PayU redirects here with #wallet?payu=ok|fail — capture before auth/route can strip it.
+  const bootPayu = capturePayuReturn();
+  if (bootPayu) {
+    stashPayuReturn(bootPayu);
+    resumePayuReturn(bootPayu);
+  }
 
   session.current().then((me) => {
     if (me.ok && me.data && me.data.role === "retailer") {

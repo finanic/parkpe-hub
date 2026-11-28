@@ -395,6 +395,30 @@ class DeskRouteTests(TestCase):
         self.patcher.start()
         self.addCleanup(self.patcher.stop)
 
+    def test_admin_reads_recent_hub_actions_for_logs(self):
+        from models.models import HubAction
+
+        HubAction.objects.create(
+            action="payswap.bbps.fetch_bill",
+            outcome="error",
+            status=503,
+            actor="shop@payswap.test",
+            role="retailer",
+            target_id="TTEST1",
+            error_reason="Biller unreachable",
+            request="POST /api/v1/payswap/bbps/fetch-bill",
+            response="HTTP 503",
+        )
+        self.client.cookies["auth_access"] = "admin-token"
+        response = self.client.get("/api/v1/desk/actions?limit=10")
+        self.assertEqual(response.status_code, 200)
+        entries = response.json()["entries"]
+        self.assertTrue(entries)
+        match = next(row for row in entries if row["action"] == "payswap.bbps.fetch_bill")
+        self.assertEqual(match["outcome"], "error")
+        self.assertEqual(match["actor"], "shop@payswap.test")
+        self.assertIn("at", match)
+
     def test_browser_origin_cannot_open_the_desk(self):
         self.client.cookies["auth_access"] = "admin-token"
         response = self.client.get(
@@ -632,6 +656,18 @@ class BbpsRouteTests(TestCase):
         self.assertTrue(len(body["plans"]) >= 1)
         self.assertEqual(body["plans"][0]["amount"], "199.00")
 
+        from integrations.bbps import parse_operator_lookup
+
+        self.assertEqual(
+            parse_operator_lookup({"success": True, "data": {"operatorId": 140, "circleId": "19"}}),
+            {"operator_id": "140", "circle": "19"},
+        )
+        missing_circle = self.client.get(
+            f"/api/v1/payswap/bbps/plans?biller={biller}&account=9876543210",
+            HTTP_X_APP_CONTEXT="payswap",
+        )
+        self.assertEqual(missing_circle.status_code, 400)
+
     def test_fetch_bill_and_pay_idempotency_and_status(self):
         from models.models import HubAction
 
@@ -649,7 +685,7 @@ class BbpsRouteTests(TestCase):
             },
         }
         with self.captureOnCommitCallbacks(execute=True):
-            with patch("domain.payswap.bbps.fetch_bill", return_value=fake_bill) as mocked_fetch:
+            with patch("domain.payswap.bbps.pipe_fetch_bill", return_value=fake_bill) as mocked_fetch:
                 fetched = self.client.post(
                     "/api/v1/payswap/bbps/fetch-bill",
                     {"biller": "65", "account": "1029384756"},
@@ -663,7 +699,7 @@ class BbpsRouteTests(TestCase):
 
         from domain.payswap.wallet import admin_adjust_wallet, wallet_overview
 
-        admin_adjust_wallet("shop@payswap.test", direction="CR", amount_paise=500000, reason="Test float", admin_email="ops@hub.test")
+        admin_adjust_wallet("shop@payswap.test", direction="CR", amount_paise=500000, reason="Test float", admin_email="ops@hub.test", idempotency_key="test-float-500000")
         fake_pay = {
             "ok": True,
             "status": 200,
@@ -674,7 +710,7 @@ class BbpsRouteTests(TestCase):
             "phase": "success",
         }
         with self.captureOnCommitCallbacks(execute=True):
-            with patch("domain.payswap.bbps.pay_bill", return_value=fake_pay) as mocked_pay:
+            with patch("domain.payswap.bbps.pipe_pay_bill", return_value=fake_pay) as mocked_pay:
                 first = self.client.post(
                     "/api/v1/payswap/bbps/pay",
                     {"biller": "65", "account": "1029384756", "amount": "1840.00"},
@@ -710,7 +746,7 @@ class BbpsRouteTests(TestCase):
 
         with self.captureOnCommitCallbacks(execute=True):
             with patch(
-                "domain.payswap.bbps.payment_status",
+                "domain.payswap.bbps.pipe_payment_status",
                 return_value={
                     "ok": True,
                     "status": 200,
@@ -731,10 +767,10 @@ class BbpsRouteTests(TestCase):
         self.assertIn("payswap.bbps.pay", actions)
         self.assertIn("payswap.bbps.status", actions)
 
-    def test_failed_pay_returns_error_and_does_not_cache_idempotency(self):
+    def test_failed_pay_releases_hold_and_same_key_does_not_charge_again(self):
         from domain.payswap.wallet import admin_adjust_wallet, wallet_overview
 
-        admin_adjust_wallet("shop@payswap.test", direction="CR", amount_paise=200000, reason="Test float", admin_email="ops@hub.test")
+        admin_adjust_wallet("shop@payswap.test", direction="CR", amount_paise=200000, reason="Test float", admin_email="ops@hub.test", idempotency_key="test-float-200000")
         self.client.cookies["auth_access"] = "retailer-token"
         failed = {
             "ok": False,
@@ -745,7 +781,7 @@ class BbpsRouteTests(TestCase):
             "vendor_status": "FAILED",
             "phase": "failed",
         }
-        with patch("domain.payswap.bbps.pay_bill", return_value=failed):
+        with patch("domain.payswap.bbps.pipe_pay_bill", return_value=failed):
             res = self.client.post(
                 "/api/v1/payswap/bbps/pay",
                 {"biller": "65", "account": "1029384756", "amount": "500.00"},
@@ -768,7 +804,7 @@ class BbpsRouteTests(TestCase):
             "vendor_status": "SUCCESS",
             "phase": "success",
         }
-        with patch("domain.payswap.bbps.pay_bill", return_value=succeeded):
+        with patch("domain.payswap.bbps.pipe_pay_bill", return_value=succeeded) as mocked_retry:
             retry = self.client.post(
                 "/api/v1/payswap/bbps/pay",
                 {"biller": "65", "account": "1029384756", "amount": "500.00"},
@@ -776,9 +812,11 @@ class BbpsRouteTests(TestCase):
                 HTTP_X_APP_CONTEXT="payswap",
                 HTTP_IDEMPOTENCY_KEY="bbps-pay-fail-1",
             )
-        self.assertEqual(retry.status_code, 201)
-        self.assertTrue(retry.json()["reference"].startswith("T"))
-        self.assertEqual(wallet_overview("shop@payswap.test")["wallet"]["available"], "1500.00")
+        # A failed wallet pay is final for that key. The hold is already back; a retry must not pay again.
+        self.assertEqual(retry.status_code, 502)
+        self.assertEqual(mocked_retry.call_count, 0)
+        self.assertEqual(wallet_overview("shop@payswap.test")["wallet"]["available"], "2000.00")
+        self.assertEqual(wallet_overview("shop@payswap.test")["wallet"]["held"], "0.00")
 
     def test_mobikwik_envelope_encryption_round_trip(self):
         from cryptography.hazmat.primitives import serialization
@@ -1012,7 +1050,8 @@ class BbpsRouteTests(TestCase):
         integ_row = HubAction.objects.filter(action="integration.bbps.view_bill").latest("id")
 
         self.assertIn("POST /api/v1/payswap/bbps/fetch-bill", route_row.request)
-        self.assertIn("24BH8017B", route_row.request)
+        self.assertNotIn("24BH8017B", route_row.request)
+        self.assertIn("017B", route_row.request)
         self.assertIn("1450.00", route_row.response)
         self.assertIn("2026-11-30", route_row.response)
 
@@ -1131,6 +1170,37 @@ class EntitlementsWalletPgParkpeTests(TestCase):
         self.assertIn("ELECTRICITY", wide_ids)
         self.assertIn("WATER", wide_ids)
 
+        # Default biller allow-list curates operators inside an enabled category.
+        elec_ops = list_operators(category="ELECTRICITY", limit=2)
+        if len(elec_ops) >= 2:
+            keep_id = str(elec_ops[0].get("biller_id") or "")
+            drop_op = elec_ops[1]
+            update_default_policy(
+                bbps_biller_allowlist={"ELECTRICITY": [keep_id]},
+                admin_email="ops@hub.test",
+            )
+            curated = self.client.get(
+                "/api/v1/payswap/bbps/operators?category=ELECTRICITY",
+                HTTP_X_APP_CONTEXT="payswap",
+            )
+            self.assertEqual(curated.status_code, 200)
+            curated_ids = {str(op.get("biller_id") or "") for op in curated.json().get("operators") or []}
+            self.assertIn(keep_id, curated_ids)
+            self.assertNotIn(str(drop_op.get("biller_id") or ""), curated_ids)
+            blocked_biller = self.client.post(
+                "/api/v1/payswap/bbps/fetch-bill",
+                {"biller": drop_op["op"], "account": "1029384756"},
+                format="json",
+                HTTP_X_APP_CONTEXT="payswap",
+            )
+            self.assertEqual(blocked_biller.status_code, 403)
+            self.assertEqual(blocked_biller.json()["code"], "bbps_biller_disabled")
+            # null clears the curated list → all billers in the category again.
+            update_default_policy(
+                bbps_biller_allowlist={"ELECTRICITY": None},
+                admin_email="ops@hub.test",
+            )
+
     def test_wallet_topup_pin_lockout_freeze_and_limits(self):
         from domain.payswap.wallet import admin_update_wallet_controls, review_topup_request
 
@@ -1224,7 +1294,7 @@ class EntitlementsWalletPgParkpeTests(TestCase):
     def test_bbps_pending_hold_captures_or_releases_on_status_sync(self):
         from domain.payswap.wallet import admin_adjust_wallet, wallet_overview
 
-        admin_adjust_wallet("shop@payswap.test", direction="CR", amount_paise=100000, reason="Float", admin_email="ops@hub.test")
+        admin_adjust_wallet("shop@payswap.test", direction="CR", amount_paise=100000, reason="Float", admin_email="ops@hub.test", idempotency_key="test-float-100000")
         self.client.cookies["auth_access"] = "retailer-token"
         pending_res = {
             "ok": True,
@@ -1235,7 +1305,7 @@ class EntitlementsWalletPgParkpeTests(TestCase):
             "vendor_status": "PENDING",
             "phase": "pending",
         }
-        with patch("domain.payswap.bbps.pay_bill", return_value=pending_res):
+        with patch("domain.payswap.bbps.pipe_pay_bill", return_value=pending_res):
             res = self.client.post(
                 "/api/v1/payswap/bbps/pay",
                 {"biller": "65", "account": "1029384756", "amount": "400.00"},
@@ -1252,7 +1322,7 @@ class EntitlementsWalletPgParkpeTests(TestCase):
 
         # Status resolves to FAILED -> hold released back to 1000.00
         with patch(
-            "domain.payswap.bbps.payment_status",
+            "domain.payswap.bbps.pipe_payment_status",
             return_value={
                 "ok": True,
                 "status": 200,
@@ -1273,7 +1343,7 @@ class EntitlementsWalletPgParkpeTests(TestCase):
         from domain.payswap.wallet import wallet_overview
 
         self.client.cookies["auth_access"] = "retailer-token"
-        with patch(
+        with patch("domain.payswap.payu_checkout.pick_provider", return_value="cashfree"), patch(
             "domain.payswap.bbps.create_gateway_order",
             return_value={"ok": True, "provider_order_id": "cf_1", "payment_session_id": "sess_1", "checkout_url": ""},
         ):
@@ -1289,9 +1359,9 @@ class EntitlementsWalletPgParkpeTests(TestCase):
 
         with patch(
             "domain.payswap.wallet.fetch_gateway_order_status",
-            return_value={"ok": True, "order_status": "PAID", "paid": True, "failed": False, "provider_payment_id": "pay_99"},
+            return_value={"ok": True, "order_status": "PAID", "paid": True, "failed": False, "provider_payment_id": "pay_99", "amount": "750.00"},
         ), patch(
-            "domain.payswap.bbps.pay_bill",
+            "domain.payswap.bbps.pipe_pay_bill",
             return_value={"ok": False, "status": 502, "error": "Biller down", "reference": "T19PGFAIL1", "phase": "failed"},
         ):
             ver = self.client.post(
@@ -1437,7 +1507,277 @@ class EntitlementsWalletPgParkpeTests(TestCase):
         self.assertTrue(any(r["reference"].endswith("-CR") and r["state"] == "credited" for r in settled["transactions"]))
         self.assertFalse(any(r["reference"] == "T1PEND0001" for r in settled["transactions"]))
 
+    def test_pg_status_filter_and_stale_abandon(self):
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        from django.utils import timezone
+        from domain.payswap.transactions import list_admin_transactions
+        from domain.payswap.wallet import abandon_unpaid_pg_order, reconcile_stale_pg_orders
+        from domain.payswap import wallet as wallet_mod
+        from models.models import PgOrder
+
+        paid = PgOrder.objects.create(
+            pg_order_id="pgw-paid-1",
+            user_id="shop@payswap.test",
+            purpose="wallet_topup",
+            amount_paise=100000,
+            status="paid",
+            provider="cashfree",
+        )
+        pending = PgOrder.objects.create(
+            pg_order_id="pgw-pending-1",
+            user_id="shop@payswap.test",
+            purpose="wallet_topup",
+            amount_paise=100000,
+            status="created",
+            provider="cashfree",
+        )
+        stale = PgOrder.objects.create(
+            pg_order_id="pgw-stale-1",
+            user_id="shop@payswap.test",
+            purpose="wallet_topup",
+            amount_paise=100000,
+            status="created",
+            provider="cashfree",
+        )
+        PgOrder.objects.filter(pk=stale.pk).update(created_at=timezone.now() - timedelta(minutes=45))
+        stale.refresh_from_db()
+
+        success = list_admin_transactions(user_id="shop@payswap.test", state="success")
+        self.assertTrue(any(r["pg_order_id"] == paid.pg_order_id for r in success["pg_orders"]))
+        self.assertFalse(any(r["pg_order_id"] == pending.pg_order_id for r in success["pg_orders"]))
+
+        abandon_unpaid_pg_order(stale, reason="test_timeout")
+        stale.refresh_from_db()
+        self.assertEqual(stale.status, "failed")
+        self.assertEqual((stale.meta or {}).get("abandon_reason"), "test_timeout")
+
+        failed = list_admin_transactions(user_id="shop@payswap.test", state="failed")
+        self.assertTrue(any(r["pg_order_id"] == "pgw-stale-1" for r in failed["pg_orders"]))
+        pending_rows = list_admin_transactions(user_id="shop@payswap.test", state="pending")
+        self.assertTrue(any(r["pg_order_id"] == pending.pg_order_id for r in pending_rows["pg_orders"]))
+        self.assertFalse(any(r["pg_order_id"] == "pgw-stale-1" for r in pending_rows["pg_orders"]))
+
+        def fake_verify(pg_order_id, **kwargs):
+            row = PgOrder.objects.get(pg_order_id=pg_order_id)
+            abandon_unpaid_pg_order(row, reason="mock_reconcile")
+            return {"pg_order_id": pg_order_id, "status": "failed"}
+
+        with patch("domain.payswap.wallet.verify_pg_order", side_effect=fake_verify):
+            another = PgOrder.objects.create(
+                pg_order_id="pgw-stale-2",
+                user_id="shop@payswap.test",
+                purpose="wallet_topup",
+                amount_paise=50000,
+                status="created",
+                provider="cashfree",
+            )
+            PgOrder.objects.filter(pk=another.pk).update(
+                created_at=timezone.now() - timedelta(minutes=wallet_mod.PG_ORDER_STALE_MINUTES + 5)
+            )
+            wallet_mod._PG_RECONCILE_LAST = 0
+            stats = reconcile_stale_pg_orders(limit=10, actor="test")
+            self.assertGreaterEqual(stats["checked"], 1)
+            self.assertGreaterEqual(stats["failed"], 1)
+            another.refresh_from_db()
+            self.assertEqual(another.status, "failed")
 
 
+class RetailerErrorTests(SimpleTestCase):
+    def test_provider_text_becomes_our_sentence(self):
+        from core.errors import retailer_message
+
+        self.assertEqual(
+            retailer_message("Mobikwik rejected the token request."),
+            "The biller service is busy. Wait a minute and try again.",
+        )
+        self.assertEqual(
+            retailer_message("Invalid request"),
+            "The request could not be completed. Check the details and try again.",
+        )
+        self.assertEqual(
+            retailer_message("Recharge plans not available for this operator"),
+            "No plans are available for this operator and circle.",
+        )
+        self.assertIn(
+            "back in the wallet",
+            retailer_message("Mobikwik BBPS timed out. Wallet hold was released back to your balance."),
+        )
+        self.assertEqual(
+            retailer_message("Enter a valid 10-digit mobile number."),
+            "Enter a valid 10-digit mobile number.",
+        )
+        self.assertEqual(
+            retailer_message("Customer email is required for PayU."),
+            "Customer email is required for this payment.",
+        )
+
+    def test_paid_amount_must_match_the_order(self):
+        from domain.payswap.wallet import paid_rupees_match
+
+        self.assertTrue(paid_rupees_match(10000, "100.00", "100"))
+        self.assertFalse(paid_rupees_match(10000, "1.00"))
+        self.assertFalse(paid_rupees_match(10000, None, ""))
+
+
+class MoneyGuardTests(TestCase):
+    def test_payu_success_requires_matching_amount(self):
+        from domain.payswap.payu_checkout import verify_payu_order
+        from domain.payswap.wallet import WalletError
+        from models.models import PgOrder
+
+        order = PgOrder.objects.create(
+            pg_order_id="pu-amt-1",
+            provider="payu",
+            purpose="wallet_topup",
+            user_id="shop@payswap.test",
+            amount_paise=10000,
+            provider_order_id="txn-amt-1",
+        )
+        with patch(
+            "domain.payswap.payu_checkout.verify_payment",
+            return_value={"ok": True, "status": "success", "amount": "1.00", "provider_payment_id": "m1"},
+        ), patch("domain.payswap.payu_checkout._settle_success") as settle:
+            with self.assertRaises(WalletError):
+                verify_payu_order(order.pg_order_id, user_id=order.user_id)
+        settle.assert_not_called()
+        order.refresh_from_db()
+        self.assertEqual(order.status, "created")
+
+        with patch(
+            "domain.payswap.payu_checkout.verify_payment",
+            return_value={"ok": True, "status": "success", "amount": "100.00", "provider_payment_id": "m1"},
+        ), patch("domain.payswap.payu_checkout._settle_success") as settle:
+            out = verify_payu_order(order.pg_order_id, user_id=order.user_id)
+        self.assertEqual(out["status"], "paid")
+        self.assertTrue(settle.call_args.kwargs["signature_verified"])
+
+    def test_cashfree_topup_refuses_a_different_amount(self):
+        from domain.payswap.wallet import WalletError, apply_pg_topup_paid, get_or_create_wallet
+        from models.models import PgOrder
+
+        order = PgOrder.objects.create(
+            pg_order_id="cf-amt-1",
+            provider="cashfree",
+            purpose="wallet_topup",
+            user_id="shop@payswap.test",
+            amount_paise=10000,
+        )
+        with self.assertRaises(WalletError):
+            apply_pg_topup_paid(order.pg_order_id, paid_amount="1.00", signature_verified=True)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "created")
+        apply_pg_topup_paid(order.pg_order_id, paid_amount="100.00", signature_verified=True)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "paid")
+        self.assertEqual(get_or_create_wallet(order.user_id).available_paise, 10000)
+
+    def test_status_without_a_local_row_does_not_call_the_vendor(self):
+        from domain.payswap.bbps import BbpsServiceError, check_status
+
+        with patch("domain.payswap.bbps.pipe_payment_status") as vendor:
+            with self.assertRaises(BbpsServiceError):
+                check_status(reference="TNOPE", user_id="shop@payswap.test")
+        vendor.assert_not_called()
+
+    def test_adjust_key_is_applied_once_and_large_credit_waits(self):
+        from domain.payswap.wallet import WalletError, admin_adjust_wallet, review_wallet_adjustment
+        from models.models import WalletLedgerEntry
+
+        first = admin_adjust_wallet(
+            "shop@payswap.test",
+            direction="CR",
+            amount_paise=1000,
+            reason="One credit",
+            admin_email="ops@hub.test",
+            idempotency_key="adj-once",
+        )
+        second = admin_adjust_wallet(
+            "shop@payswap.test",
+            direction="CR",
+            amount_paise=1000,
+            reason="One credit",
+            admin_email="ops@hub.test",
+            idempotency_key="adj-once",
+        )
+        self.assertTrue(second.get("replay"))
+        self.assertEqual(first["entry"]["entry_id"], second["entry"]["entry_id"])
+        self.assertEqual(WalletLedgerEntry.objects.filter(idempotency_key="adj-once").count(), 1)
+        with self.assertRaises(WalletError):
+            admin_adjust_wallet(
+                "shop@payswap.test",
+                direction="CR",
+                amount_paise=1000,
+                reason="Missing key",
+                admin_email="ops@hub.test",
+            )
+
+        with patch("domain.payswap.wallet._signing_admin_count", return_value=2):
+            queued = admin_adjust_wallet(
+                "shop@payswap.test",
+                direction="CR",
+                amount_paise=2_000_000,
+                reason="Large float",
+                admin_email="ops@hub.test",
+                idempotency_key="adj-large",
+            )
+        self.assertTrue(queued["pending"])
+        self.assertEqual(WalletLedgerEntry.objects.filter(idempotency_key="adj-large").count(), 0)
+        with self.assertRaises(WalletError):
+            review_wallet_adjustment(queued["adjustment"]["adjustment_id"], decision="approve", admin_email="ops@hub.test")
+        applied = review_wallet_adjustment(
+            queued["adjustment"]["adjustment_id"],
+            decision="approve",
+            admin_email="second@hub.test",
+        )
+        self.assertFalse(applied["pending"])
+        self.assertEqual(WalletLedgerEntry.objects.filter(idempotency_key="adj-large").count(), 1)
+
+    def test_vendor_exception_keeps_the_same_payment_reference(self):
+        from core.idempotency import run_once_external
+        from models.models import BbpsTransaction, IdempotencyRecord
+
+        BbpsTransaction.objects.create(
+            reference="TKEEP1",
+            user_id="shop@payswap.test",
+            operator_id="1",
+            biller_name="Jio",
+            account_mask="••••3210",
+            amount_paise=1000,
+            idempotency_key="pay-keep",
+        )
+
+        def boom():
+            raise RuntimeError("after vendor")
+
+        with self.assertRaises(RuntimeError):
+            run_once_external(
+                app_context="payswap",
+                user_id="shop@payswap.test",
+                endpoint="/api/v1/payswap/bbps/pay",
+                key="pay-keep",
+                body_hash="a" * 64,
+                produce=boom,
+            )
+        row = IdempotencyRecord.objects.get(idempotency_key="pay-keep")
+        self.assertEqual(row.state, "pending")
+        self.assertTrue(row.body.get("resume"))
+        self.assertEqual(row.body.get("reference"), "TKEEP1")
+
+        def again():
+            return 201, {"reference": "TKEEP1"}
+
+        status, body = run_once_external(
+            app_context="payswap",
+            user_id="shop@payswap.test",
+            endpoint="/api/v1/payswap/bbps/pay",
+            key="pay-keep",
+            body_hash="a" * 64,
+            produce=again,
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(body["reference"], "TKEEP1")
+        self.assertEqual(BbpsTransaction.objects.filter(idempotency_key="pay-keep").count(), 1)
 
 

@@ -17,8 +17,14 @@ from models.models import (
     WalletTopupRequest,
 )
 
+# Desk reports use success|pending|failed across rails; map to stored values.
+_PG_STATE = {"success": "paid", "pending": "created", "failed": "failed"}
+_TOPUP_STATE = {"success": "approved", "pending": "pending", "failed": "rejected"}
+_HOLD_STATE = {"success": "captured", "pending": "active", "failed": "released"}
+
 
 def serialize_bbps_tx(row: BbpsTransaction, *, hold: WalletHold | None = None) -> dict[str, Any]:
+    bulk_batch_id = str(getattr(row, "bulk_batch_id", "") or "")
     out: dict[str, Any] = {
         "reference": row.reference,
         "user_id": row.user_id,
@@ -38,6 +44,10 @@ def serialize_bbps_tx(row: BbpsTransaction, *, hold: WalletHold | None = None) -
         "net_commission": paise_to_rupees_str(int(row.commission_paise or 0)),
         "payment_channel": row.payment_channel,
         "payment_mode": row.payment_mode,
+        "bbps_pipe": str(getattr(row, "bbps_pipe", "") or ""),
+        "source": "bulk" if bulk_batch_id else "single",
+        "bulk_batch_id": bulk_batch_id,
+        "bulk_row_id": str(getattr(row, "bulk_row_id", "") or ""),
         "state": row.state,
         "vendor_status": row.vendor_status,
         "vendor_txn_id": row.vendor_txn_id,
@@ -61,14 +71,24 @@ def list_retailer_transactions(
     service: str = "all",
     state: str = "all",
     query: str = "",
+    source: str = "all",
+    batch_id: str = "",
     limit: int = 50,
 ) -> dict[str, Any]:
     lim = max(1, min(int(limit), 200))
     q = (query or "").strip().lower()
+    src = (source or "all").strip().lower()
+    batch = (batch_id or "").strip()
 
     bbps_qs = BbpsTransaction.objects.filter(user_id=user_id).order_by("-created_at")
     if state in {"pending", "success", "failed"}:
         bbps_qs = bbps_qs.filter(state=state)
+    if batch:
+        bbps_qs = bbps_qs.filter(bulk_batch_id=batch)
+    elif src == "bulk":
+        bbps_qs = bbps_qs.exclude(bulk_batch_id="")
+    elif src == "single":
+        bbps_qs = bbps_qs.filter(bulk_batch_id="")
     bbps_rows = []
     for row in bbps_qs[:lim]:
         item = serialize_bbps_tx(row)
@@ -169,11 +189,16 @@ def list_admin_transactions(
     state: str = "all",
     channel: str = "all",
     query: str = "",
+    source: str = "all",
+    batch_id: str = "",
     limit: int = 200,
 ) -> dict[str, Any]:
     lim = max(1, min(int(limit), 500))
     uid = user_id.strip().lower() if user_id else ""
     q = (query or "").strip().lower()
+    src = (source or "all").strip().lower()
+    batch = (batch_id or "").strip()
+    # PG reconcile stays on verify_pg_order / cron — not on every desk list paint.
 
     qs = BbpsTransaction.objects.all().order_by("-created_at")
     if uid:
@@ -182,6 +207,12 @@ def list_admin_transactions(
         qs = qs.filter(state=state)
     if channel in {"wallet", "pg"}:
         qs = qs.filter(payment_channel=channel)
+    if batch:
+        qs = qs.filter(bulk_batch_id=batch)
+    elif src == "bulk":
+        qs = qs.exclude(bulk_batch_id="")
+    elif src == "single":
+        qs = qs.filter(bulk_batch_id="")
 
     bbps_list = list(qs[:lim])
     hold_ids = [r.wallet_hold_id for r in bbps_list if r.wallet_hold_id]
@@ -206,6 +237,8 @@ def list_admin_transactions(
     pg_qs = PgOrder.objects.all().order_by("-created_at")
     if uid:
         pg_qs = pg_qs.filter(user_id=uid)
+    if state in _PG_STATE:
+        pg_qs = pg_qs.filter(status=_PG_STATE[state])
     pg_rows = []
     for row in pg_qs[:lim]:
         item = {
@@ -275,6 +308,8 @@ def list_admin_transactions(
     topup_qs = WalletTopupRequest.objects.select_related("wallet").order_by("-created_at", "-id")
     if uid:
         topup_qs = topup_qs.filter(user_id=uid)
+    if state in _TOPUP_STATE:
+        topup_qs = topup_qs.filter(status=_TOPUP_STATE[state])
     topup_list = list(topup_qs[:lim])
     topup_ids = [r.request_id for r in topup_list]
     topup_ledgers = (
@@ -304,6 +339,8 @@ def list_admin_transactions(
     holds_qs = WalletHold.objects.select_related("wallet").order_by("-created_at", "-id")
     if uid:
         holds_qs = holds_qs.filter(wallet__user_id=uid)
+    if state in _HOLD_STATE:
+        holds_qs = holds_qs.filter(status=_HOLD_STATE[state])
     hold_rows = []
     for row in holds_qs[:lim]:
         item = {

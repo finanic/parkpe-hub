@@ -18,8 +18,15 @@ sys.path.insert(0, str(APP_DIR))
 if __name__ == "__main__":
     import os
 
+    from config.envfile import load_backend_env
     from integrations.bbps import load_local_env as load_bbps_env
+    from integrations.kaleyra import load_local_env as load_kaleyra_env
+    from auth.verify import load_cashfree_env, load_mail_env
 
+    load_backend_env()
+    load_kaleyra_env()
+    load_mail_env()
+    load_cashfree_env()
     load_bbps_env()
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
     from django.core.management import execute_from_command_line

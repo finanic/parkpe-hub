@@ -10,8 +10,12 @@ from __future__ import annotations
 import json
 
 from core.actions import bind_action, log_action
+from core.errors import retailer_message
+from django.core.exceptions import RequestDataTooBig, TooManyFieldsSent, TooManyFilesSent
 from django.http import JsonResponse
 from rest_framework.views import exception_handler
+
+_TOO_LARGE = (RequestDataTooBig, TooManyFieldsSent, TooManyFilesSent)
 
 _ACTION_MAP = {
     "/api/v1/payswap/bbps/operators": "payswap.bbps.operators",
@@ -32,6 +36,17 @@ def _action_for(path: str) -> str:
     return trimmed.replace("/", ".").replace("-", "_") or "api.v1"
 
 
+def _public_payload(data: dict) -> dict:
+    """The browser sees our sentence. error_reason in the log keeps the original."""
+    if not isinstance(data, dict) or "error" not in data:
+        return data
+    original = str(data.get("error") or "")
+    public = retailer_message(original)
+    if public == original:
+        return data
+    return {**data, "error": public}
+
+
 def _log_v1_error(request, status: int, data: dict) -> None:
     if request is None or not str(getattr(request, "path", "")).startswith("/api/v1/"):
         return
@@ -50,15 +65,16 @@ def _log_v1_error(request, status: int, data: dict) -> None:
     req_line = f"{request.method} {request.path}"
     if req_meta:
         req_line += "\n" + json.dumps(req_meta, separators=(",", ":"))
+    shown = {key: value for key, value in data.items() if key != "_raw_error"}
     log_action(
         action=_action_for(request.path),
         outcome="error",
         status=status,
         duration_ms=0,
         error_code=str(data.get("code") or ""),
-        error_reason=str(data.get("error") or ""),
+        error_reason=str(data.get("_raw_error") or data.get("error") or "")[:200],
         request=req_line,
-        response=f"HTTP {status}\n{json.dumps(data, separators=(',', ':'), ensure_ascii=False)}",
+        response=f"HTTP {status}\n{json.dumps(shown, separators=(',', ':'), ensure_ascii=False)}",
     )
 
 
@@ -69,12 +85,15 @@ def api_exception(exc, context):
     request = context.get("request") if isinstance(context, dict) else None
     payload = response.data
     if isinstance(payload, dict) and "error" in payload and "code" in payload:
-        _log_v1_error(request, response.status_code, payload)
+        raw = str(payload.get("error") or "")
+        response.data = _public_payload(payload)
+        _log_v1_error(request, response.status_code, {**payload, "_raw_error": raw})
         return response
     detail = payload.get("detail") if isinstance(payload, dict) else payload
     if isinstance(detail, dict) and "error" in detail and "code" in detail:
-        response.data = detail
-        _log_v1_error(request, response.status_code, detail)
+        raw = str(detail.get("error") or "")
+        response.data = _public_payload(detail)
+        _log_v1_error(request, response.status_code, {**detail, "_raw_error": raw})
         return response
     if response.status_code == 400 and isinstance(payload, dict) and "detail" not in payload:
         response.data = {"error": "Check the request.", "code": "validation", "fields": payload}
@@ -104,8 +123,28 @@ class ApiErrorEnvelopeMiddleware:
         try:
             return self.get_response(request)
         except Exception:
-            if not request.path.startswith("/api/"):
+            response = self._api_failure(request)
+            if response is None:
                 raise
-            data = {"error": "Something went wrong.", "code": "server_error"}
-            _log_v1_error(request, 500, data)
-            return JsonResponse(data, status=500)
+            return response
+
+    def process_exception(self, request, exception):
+        # DRF re-raises inside the view. Django handles that before __call__
+        # sees it, so the JSON body has to be returned from here.
+        if isinstance(exception, _TOO_LARGE):
+            return self._too_large(request)
+        return self._api_failure(request)
+
+    def _too_large(self, request):
+        if not str(getattr(request, "path", "")).startswith("/api/"):
+            return None
+        data = {"error": "The request is too large.", "code": "validation"}
+        _log_v1_error(request, 400, data)
+        return JsonResponse(data, status=400)
+
+    def _api_failure(self, request):
+        if not str(getattr(request, "path", "")).startswith("/api/"):
+            return None
+        data = {"error": "Something went wrong.", "code": "server_error"}
+        _log_v1_error(request, 500, data)
+        return JsonResponse(data, status=500)

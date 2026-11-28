@@ -20,6 +20,7 @@ from domain.payswap.bbps import (
     catalogue,
     check_status,
     collect,
+    mask_consumer_account,
     execute_pg_paid_bbps,
     fetch_bill_details,
     prepaid_plans,
@@ -31,6 +32,7 @@ from domain.payswap.transactions import list_retailer_transactions
 from domain.payswap.wallet import (
     apply_pg_topup_paid,
     create_pg_topup_order,
+    paid_rupees_match,
     rupees_to_paise,
     set_wallet_pin,
     submit_topup_request,
@@ -251,10 +253,36 @@ class PgWebhookView(APIView):
         if not order:
             return Response({"ok": True, "ignored": True}, status=200)
         if payment_status == "SUCCESS":
+            reported = (payment_info.get("payment_amount"), order_info.get("order_amount"))
+            if not paid_rupees_match(int(order.amount_paise), *reported):
+                log_action(
+                    action="payswap.pg.webhook",
+                    outcome="error",
+                    status=400,
+                    duration_ms=0,
+                    target_id=order.pg_order_id,
+                    error_code="validation",
+                    error_reason="amount mismatch",
+                    request=f"order={order.pg_order_id}",
+                    response="HTTP 200\nignored amount",
+                )
+                return Response({"ok": True, "ignored": True}, status=200)
+            paid_amount = str(payment_info.get("payment_amount") or order_info.get("order_amount") or "")
             if order.purpose == "wallet_topup":
-                apply_pg_topup_paid(order.pg_order_id, provider_payment_id=cf_payment_id, signature_verified=True)
+                apply_pg_topup_paid(
+                    order.pg_order_id,
+                    provider_payment_id=cf_payment_id,
+                    signature_verified=True,
+                    paid_amount=paid_amount,
+                )
             elif order.purpose == "bbps_direct":
-                execute_pg_paid_bbps(order.pg_order_id, provider_payment_id=cf_payment_id)
+                # Mark paid + ACK webhook; vendor pay continues in a daemon thread.
+                execute_pg_paid_bbps(
+                    order.pg_order_id,
+                    provider_payment_id=cf_payment_id,
+                    paid_amount=paid_amount,
+                    defer_vendor_pay=True,
+                )
         elif payment_status in {"FAILED", "USER_DROPPED"} and order.status == "created":
             order.status = "failed"
             order.save(update_fields=["status", "updated_at"])
@@ -273,12 +301,16 @@ class TransactionsView(APIView):
         service = str(request.query_params.get("service") or "all").strip().lower()
         state = str(request.query_params.get("state") or "all").strip().lower()
         query = str(request.query_params.get("q") or "").strip()[:80]
+        source = str(request.query_params.get("source") or "all").strip().lower()
+        batch_id = str(request.query_params.get("batch_id") or "").strip()[:64]
         return Response(
             list_retailer_transactions(
                 request.user.user_id,
                 service=service,
                 state=state,
                 query=query,
+                source=source,
+                batch_id=batch_id,
             ),
             status=200,
         )
@@ -434,7 +466,7 @@ class BbpsFetchBillView(APIView):
         req_text = "POST /api/v1/payswap/bbps/fetch-bill\n" + json.dumps(
             {
                 "biller": data["biller"],
-                "account": data["account"],
+                "account": mask_consumer_account(data["account"]),
                 "circle": data.get("circle", ""),
                 "payment_mode": data.get("payment_mode", ""),
                 "ad_params": data.get("ad_params") or {},
@@ -476,7 +508,10 @@ class BbpsFetchBillView(APIView):
             duration_ms=elapsed_ms(started),
             target_id=str(body.get("operator_id") or data["biller"]),
             request=req_text,
-            response="HTTP 200\n" + json.dumps(body, separators=(",", ":")),
+            response="HTTP 200\n" + json.dumps(
+                {**body, "account": mask_consumer_account(body.get("account", ""))},
+                separators=(",", ":"),
+            ),
         )
         return Response(body, status=200)
 
@@ -485,14 +520,17 @@ def _summarize_bbps_pay(data, body):
     req = "POST /api/v1/payswap/bbps/pay\n" + json.dumps(
         {
             "biller": data["biller"],
-            "account": data["account"],
+            "account": mask_consumer_account(data["account"]),
             "amount": f"{data['amount']:.2f}",
             "payment_mode": data.get("payment_mode", "Cash"),
             "payment_rail": data.get("payment_rail", "wallet"),
         },
         separators=(",", ":"),
     )
-    resp = ("HTTP 201\n" + json.dumps(body, separators=(",", ":"))) if isinstance(body, dict) else ""
+    logged = dict(body) if isinstance(body, dict) else None
+    if logged is not None and "account" in logged:
+        logged["account"] = mask_consumer_account(logged.get("account", ""))
+    resp = ("HTTP 201\n" + json.dumps(logged, separators=(",", ":"))) if logged is not None else ""
     return req, resp
 
 
@@ -568,3 +606,152 @@ class BbpsStatusView(APIView):
             response="HTTP 200\n" + json.dumps(body, separators=(",", ":")),
         )
         return Response(body, status=200)
+
+
+@payswap_only
+class BulkBbpsTemplateView(APIView):
+    def get(self, request):
+        from domain.payswap.bulk_bbps import template_response
+        from domain.payswap.entitlements import require_bbps_bulk
+
+        bind_action(app_context=request.user.app_context, actor=request.user.user_id, role=request.user.role)
+        require_bbps_bulk(request.user.user_id)
+        op = str(request.query_params.get("op") or "").strip()
+        biller_id = str(request.query_params.get("biller_id") or "").strip()
+        # Browser download uses GET plan=65:3,99:2 (sdk-client download). POST kept for tests/tools.
+        plan_raw = str(request.query_params.get("plan") or "").strip()
+        return template_response(
+            user_id=request.user.user_id,
+            op=op,
+            biller_id=biller_id,
+            plan_raw=plan_raw,
+        )
+
+    def post(self, request):
+        """Multi-biller plan: { billers: [{ op, count }, ...] } → CSV with that many blank rows."""
+        from domain.payswap.bulk_bbps import template_plan_response
+        from domain.payswap.entitlements import require_bbps_bulk
+
+        bind_action(app_context=request.user.app_context, actor=request.user.user_id, role=request.user.role)
+        require_bbps_bulk(request.user.user_id)
+        data = request.data if isinstance(request.data, dict) else {}
+        billers = data.get("billers") if isinstance(data.get("billers"), list) else []
+        return template_plan_response(user_id=request.user.user_id, billers=billers)
+
+
+@payswap_only
+class BulkBbpsBatchesView(APIView):
+    def get(self, request):
+        from domain.payswap.bulk_bbps import list_batches
+
+        bind_action(app_context=request.user.app_context, actor=request.user.user_id, role=request.user.role)
+        limit = int(request.query_params.get("limit") or 40)
+        return Response(list_batches(user_id=request.user.user_id, limit=limit), status=200)
+
+    def post(self, request):
+        from domain.payswap.bulk_bbps import create_batch_from_upload
+
+        started = time.perf_counter()
+        bind_action(app_context=request.user.app_context, actor=request.user.user_id, role=request.user.role)
+        upload = request.FILES.get("file") or request.FILES.get("upload")
+        if upload is None:
+            raise ValidationError({"error": "Upload a CSV or Excel file as file.", "code": "validation"})
+        locked_op = str(request.data.get("op") or request.data.get("operator_id") or "").strip()
+        locked_biller = str(request.data.get("biller_id") or "").strip()
+        body = create_batch_from_upload(
+            user_id=request.user.user_id,
+            upload=upload,
+            locked_op=locked_op,
+            locked_biller_id=locked_biller,
+        )
+        request._hub_logged = True
+        log_action(
+            action="payswap.bbps.bulk.create",
+            outcome="ok",
+            status=201,
+            duration_ms=elapsed_ms(started),
+            target_id=body.get("batch_id", ""),
+            request=f"POST {request.path}\nfile={getattr(upload, 'name', '')} op={locked_op or '-'}",
+            response=f"HTTP 201\nbatch={body.get('batch_id')}",
+        )
+        return Response(body, status=201)
+
+
+@payswap_only
+class BulkBbpsBatchDetailView(APIView):
+    def get(self, request, batch_id: str):
+        from domain.payswap.bulk_bbps import serialize_batch
+
+        bind_action(app_context=request.user.app_context, actor=request.user.user_id, role=request.user.role)
+        return Response(serialize_batch(batch_id, user_id=request.user.user_id), status=200)
+
+
+@payswap_only
+class BulkBbpsBatchRowsView(APIView):
+    def get(self, request, batch_id: str):
+        from domain.payswap.bulk_bbps import list_rows
+
+        bind_action(app_context=request.user.app_context, actor=request.user.user_id, role=request.user.role)
+        return Response(
+            list_rows(
+                batch_id,
+                user_id=request.user.user_id,
+                fetch_state=request.query_params.get("fetch_state") or "",
+                pay_state=request.query_params.get("pay_state") or "",
+                due_bucket=request.query_params.get("due_bucket") or "",
+                q=request.query_params.get("q") or "",
+                limit=int(request.query_params.get("limit") or 200),
+                offset=int(request.query_params.get("offset") or 0),
+            ),
+            status=200,
+        )
+
+
+@payswap_only
+class BulkBbpsRefetchView(APIView):
+    def post(self, request, batch_id: str):
+        from domain.payswap.bulk_bbps import refetch_rows
+
+        bind_action(app_context=request.user.app_context, actor=request.user.user_id, role=request.user.role)
+        data = request.data if isinstance(request.data, dict) else {}
+        row_ids = data.get("row_ids") if isinstance(data.get("row_ids"), list) else None
+        return Response(refetch_rows(batch_id, user_id=request.user.user_id, row_ids=row_ids), status=200)
+
+
+@payswap_only
+class BulkBbpsProceedView(APIView):
+    def post(self, request, batch_id: str):
+        from domain.payswap.bulk_bbps import proceed_batch
+        from schemas.serializers import BulkBbpsProceedSerializer
+
+        return post_mutation(
+            request,
+            BulkBbpsProceedSerializer,
+            lambda data, user_id: proceed_batch(
+                batch_id,
+                user_id=user_id,
+                wallet_pin=str(data.get("wallet_pin") or ""),
+                row_ids=data.get("row_ids") if isinstance(data.get("row_ids"), list) else None,
+                exclude_row_ids=data.get("exclude_row_ids") if isinstance(data.get("exclude_row_ids"), list) else None,
+            ),
+            action="payswap.bbps.bulk.proceed",
+            external=True,
+        )
+
+
+@payswap_only
+class BulkBbpsCancelView(APIView):
+    def post(self, request, batch_id: str):
+        from domain.payswap.bulk_bbps import cancel_batch
+
+        bind_action(app_context=request.user.app_context, actor=request.user.user_id, role=request.user.role)
+        return Response(cancel_batch(batch_id, user_id=request.user.user_id), status=200)
+
+
+@payswap_only
+class BulkBbpsExportView(APIView):
+    def get(self, request, batch_id: str):
+        from domain.payswap.bulk_bbps import export_batch_csv
+
+        bind_action(app_context=request.user.app_context, actor=request.user.user_id, role=request.user.role)
+        return export_batch_csv(batch_id, user_id=request.user.user_id)

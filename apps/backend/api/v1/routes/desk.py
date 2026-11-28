@@ -40,6 +40,7 @@ from domain.payswap.commission import (
     update_retailer_service_share,
 )
 from domain.payswap.entitlements import (
+    list_default_bbps_billers,
     resolve_retailer_entitlements,
     serialize_default_policy,
     update_default_policy,
@@ -49,12 +50,15 @@ from domain.payswap.transactions import list_admin_transactions
 from domain.payswap.wallet import (
     admin_adjust_wallet,
     admin_update_wallet_controls,
+    pending_wallet_adjustments,
+    review_wallet_adjustment,
     paise_to_rupees_str,
     review_topup_request,
     rupees_to_paise,
     serialize_ledger_entry,
     serialize_topup_request,
     serialize_wallet,
+    verify_pg_order,
     wallet_overview,
 )
 from pathlib import Path
@@ -62,6 +66,7 @@ from pathlib import Path
 from models.models import (
     BbpsTransaction,
     CommissionInvoice,
+    HubAction,
     IdempotencyRecord,
     PgOrder,
     WalletAccount,
@@ -114,6 +119,42 @@ class _Admin:
 class DeskView(APIView):
     authentication_classes = [AdminAuthentication]
     permission_classes = [AdminOnly]
+
+
+class DeskActionsView(DeskView):
+    """Recent HubAction rows for the console Logs screen (auth proxies this)."""
+
+    def get(self, request):
+        try:
+            limit = min(200, max(1, int(request.query_params.get("limit") or 80)))
+        except (TypeError, ValueError):
+            limit = 80
+        rows = HubAction.objects.order_by("-id")[:limit]
+        entries = []
+        for row in rows:
+            at = row.created_at
+            if timezone.is_aware(at):
+                stamp = int(at.timestamp())
+            else:
+                stamp = int(timezone.make_aware(at, timezone.get_current_timezone()).timestamp())
+            entries.append(
+                {
+                    "id": row.id,
+                    "at": stamp,
+                    "action": row.action,
+                    "actor": row.actor,
+                    "role": row.role,
+                    "target_id": row.target_id,
+                    "outcome": row.outcome,
+                    "status": row.status,
+                    "duration_ms": row.duration_ms,
+                    "error_code": row.error_code,
+                    "error_reason": row.error_reason,
+                    "request": row.request,
+                    "response": row.response,
+                }
+            )
+        return Response({"entries": entries})
 
 
 class OverviewView(DeskView):
@@ -240,9 +281,15 @@ class DefaultEntitlementsView(DeskView):
             enabled_bbps_categories=(
                 data.get("enabled_bbps_categories") if isinstance(data.get("enabled_bbps_categories"), list) else None
             ),
+            bbps_biller_allowlist=(
+                data.get("bbps_biller_allowlist") if isinstance(data.get("bbps_biller_allowlist"), dict) else None
+            ),
             allow_wallet_pay=data.get("allow_wallet_pay") if "allow_wallet_pay" in data else None,
             allow_pg_pay=data.get("allow_pg_pay") if "allow_pg_pay" in data else None,
             allow_pg_topup=data.get("allow_pg_topup") if "allow_pg_topup" in data else None,
+            pg_provider=data.get("pg_provider") if "pg_provider" in data else None,
+            bbps_pipe=data.get("bbps_pipe") if "bbps_pipe" in data else None,
+            bbps_bulk_enabled=data.get("bbps_bulk_enabled") if "bbps_bulk_enabled" in data else None,
             default_per_txn_limit_paise=per_txn,
             default_daily_debit_limit_paise=daily,
             default_min_balance_paise=min_bal,
@@ -250,6 +297,19 @@ class DefaultEntitlementsView(DeskView):
         )
         request._hub_logged = True
         return Response(out)
+
+
+class DefaultBbpsBillersView(DeskView):
+    def get(self, request):
+        category = (request.query_params.get("category") or "").strip()
+        query = (request.query_params.get("q") or "").strip()
+        try:
+            limit = int(request.query_params.get("limit") or 400)
+        except (TypeError, ValueError):
+            limit = 400
+        if not category:
+            return Response({"error": "Send ?category=ELECTRICITY", "code": "validation"}, status=400)
+        return Response(list_default_bbps_billers(category=category, query=query, limit=limit))
 
 
 class RetailerEntitlementsView(DeskView):
@@ -275,7 +335,7 @@ class RetailerEntitlementsView(DeskView):
             "clear_payment_overrides": bool(data.get("clear_payment_overrides", False)),
             "admin_email": request.user.email,
         }
-        for key in ("allow_wallet_pay", "allow_pg_pay", "allow_pg_topup"):
+        for key in ("allow_wallet_pay", "allow_pg_pay", "allow_pg_topup", "bbps_pipe", "bbps_bulk_enabled"):
             if key in data:
                 kwargs[key] = data[key]
         out = update_retailer_entitlements(email, **kwargs)
@@ -289,6 +349,7 @@ class WalletsView(DeskView):
         if email:
             data = wallet_overview(email)
             data["entitlements"] = resolve_retailer_entitlements(email)
+            data["pending_adjustments"] = pending_wallet_adjustments(email)
             return Response(data)
         wallets = [serialize_wallet(w) for w in WalletAccount.objects.all().order_by("-updated_at")[:200]]
         topup_rows = list(WalletTopupRequest.objects.select_related("wallet").order_by("-created_at", "-id")[:200])
@@ -314,9 +375,11 @@ class WalletsView(DeskView):
                 "status": p.status,
                 "provider_order_id": p.provider_order_id,
                 "provider_payment_id": p.provider_payment_id,
+                "checkout_url": p.checkout_url or "",
                 "signature_verified": bool(p.signature_verified),
                 "paid_at": p.paid_at.isoformat() if p.paid_at else "",
                 "created_at": p.created_at.isoformat() if p.created_at else "",
+                "updated_at": p.updated_at.isoformat() if p.updated_at else "",
             }
             for p in PgOrder.objects.filter(purpose="wallet_topup").order_by("-created_at")[:100]
         ]
@@ -370,6 +433,21 @@ class WalletAdjustView(DeskView):
             amount_paise=amount_paise,
             reason=reason,
             admin_email=request.user.email,
+            idempotency_key=request.headers.get("Idempotency-Key", ""),
+        )
+        request._hub_logged = True
+        return Response(out)
+
+
+class WalletAdjustReviewView(DeskView):
+    def post(self, request):
+        bind_action(actor=request.user.email, role=ADMIN_ROLE, app_context="payswap")
+        data = request.data if isinstance(request.data, dict) else {}
+        out = review_wallet_adjustment(
+            str(data.get("adjustment_id") or "").strip(),
+            decision=str(data.get("decision") or ""),
+            admin_email=request.user.email,
+            note=str(data.get("note") or ""),
         )
         request._hub_logged = True
         return Response(out)
@@ -405,11 +483,23 @@ class AdminTransactionsView(DeskView):
         state = (request.query_params.get("state") or "all").strip().lower()
         channel = (request.query_params.get("channel") or "all").strip().lower()
         query = (request.query_params.get("q") or "").strip()
+        source = (request.query_params.get("source") or "all").strip().lower()
+        batch_id = (request.query_params.get("batch_id") or "").strip()
         try:
             limit = int(request.query_params.get("limit") or 200)
         except (TypeError, ValueError):
             limit = 200
-        return Response(list_admin_transactions(user_id=email, state=state, channel=channel, query=query, limit=limit))
+        return Response(
+            list_admin_transactions(
+                user_id=email,
+                state=state,
+                channel=channel,
+                query=query,
+                source=source,
+                batch_id=batch_id,
+                limit=limit,
+            )
+        )
 
 
 class AdminBbpsSyncView(DeskView):
@@ -420,6 +510,66 @@ class AdminBbpsSyncView(DeskView):
         if not ref:
             return Response({"error": "Send transaction reference.", "code": "validation"}, status=400)
         out = check_status(reference=ref, user_id=request.user.email, actor_role=ADMIN_ROLE)
+        request._hub_logged = True
+        return Response(out)
+
+
+class AdminBulkBbpsView(DeskView):
+    def get(self, request):
+        from domain.payswap.bulk_bbps import admin_list_batches
+
+        bind_action(actor=request.user.email, role=ADMIN_ROLE, app_context="payswap")
+        q = (request.query_params.get("q") or "").strip()
+        try:
+            limit = int(request.query_params.get("limit") or 50)
+        except (TypeError, ValueError):
+            limit = 50
+        return Response(admin_list_batches(limit=limit, q=q))
+
+
+class AdminBulkBbpsBatchView(DeskView):
+    def get(self, request, batch_id: str):
+        from domain.payswap.bulk_bbps import list_rows, process_fetch_queue, serialize_batch
+
+        bind_action(actor=request.user.email, role=ADMIN_ROLE, app_context="payswap")
+        process_fetch_queue(limit=5, batch_id=batch_id)
+        return Response(
+            {
+                "batch": serialize_batch(batch_id, admin=True),
+                "rows": list_rows(batch_id, admin=True, limit=200).get("rows") or [],
+            }
+        )
+
+    def post(self, request, batch_id: str):
+        from domain.payswap.bulk_bbps import process_fetch_queue, serialize_batch
+
+        bind_action(actor=request.user.email, role=ADMIN_ROLE, app_context="payswap")
+        data = request.data if isinstance(request.data, dict) else {}
+        action = str(data.get("action") or "sync").strip().lower()
+        if action in {"sync", "fetch"}:
+            done = process_fetch_queue(limit=20, batch_id=batch_id)
+            request._hub_logged = True
+            log_action(
+                action="desk.bbps.bulk.sync",
+                outcome="ok",
+                status=200,
+                duration_ms=0,
+                target_id=batch_id,
+                request=f"action={action}",
+                response=f"HTTP 200\nfetched={done}",
+            )
+            return Response({"batch": serialize_batch(batch_id, admin=True), "fetched": done})
+        return Response({"error": "Unsupported action. Use sync.", "code": "validation"}, status=400)
+
+
+class AdminPgSyncView(DeskView):
+    def post(self, request):
+        bind_action(actor=request.user.email, role=ADMIN_ROLE, app_context="payswap")
+        data = request.data if isinstance(request.data, dict) else {}
+        pg_order_id = str(data.get("pg_order_id") or "").strip()
+        if not pg_order_id:
+            return Response({"error": "Send pg_order_id.", "code": "validation"}, status=400)
+        out = verify_pg_order(pg_order_id)
         request._hub_logged = True
         return Response(out)
 

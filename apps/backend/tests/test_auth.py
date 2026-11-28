@@ -71,6 +71,15 @@ class FakeVerify:
         ok, _registered = self.pan_verify(pan, name)
         return ok
 
+    def gstin_verify(self, gstin):
+        ok = gstin == "27ABCDE1234F1Z5"
+        record = {"legal_name": "PARKPE USER STORES", "trade_name": "PARKPE USER", "status": "ACTIVE"} if ok else {}
+        return ok, record
+
+    def udyam_verify(self, udyam, verification_id):
+        ok = udyam == "UDYAM-RJ-12-0001234"
+        return ok, "PARKPE USER" if ok else ""
+
 
 class AuthTests(unittest.TestCase):
     def setUp(self):
@@ -161,7 +170,7 @@ class AuthTests(unittest.TestCase):
             )
             self.assertEqual(confirmed, 200)
 
-    def account(self, email, role, mobile="9800000010", password="Counter-outlet-1042"):
+    def account(self, email, role, mobile="9800000010", password="Counter-outlet-1042", approve=True):
         me_status, me = self.request("GET", "/api/auth/me", origin=self.base)
         if me_status != 200 or me.get("role") != "admin":
             self.operator_session()
@@ -209,14 +218,88 @@ class AuthTests(unittest.TestCase):
             origin=self.base,
         )
         self.assertEqual(status, 200, pan)
-        self.assertTrue(pan["account_ready"])
+        self.assertFalse(pan["account_ready"])
+        self.assertTrue(pan["business_required"])
+        status, business = self.request(
+            "POST",
+            "/api/auth/signup/business",
+            {
+                "signup_id": started["signup_id"],
+                "gstin": "27ABCDE1234F1Z5",
+                "udyam": "UDYAM-RJ-12-0001234",
+                "outlet_name": "ParkPe User Store",
+                "lat": "26.912400",
+                "lng": "75.787300",
+                "location_source": "desk",
+            },
+            origin=self.base,
+        )
+        self.assertEqual(status, 200, business)
+        self.assertTrue(business["account_ready"])
+        self.assertFalse(business["sign_in"])
+        if approve:
+            status, review = self.request(
+                "POST",
+                "/api/auth/desk/business-review",
+                {"email": email, "decision": "approve"},
+                origin=self.base,
+            )
+            self.assertEqual(status, 200, review)
+            self.assertTrue(review["sign_in"])
         self.cookies = {}
+
+    def test_old_signup_pan_is_deleted(self):
+        now = int(time.time()) - (25 * 60 * 60)
+        self.app.store.save_signup(
+            {
+                "id": "old-signup",
+                "email": "old@outlet.test",
+                "mobile": "9800000099",
+                "role": "retailer",
+                "password_hash": "x",
+                "user_id": None,
+                "email_code_hash": "e",
+                "sms_code_hash": "s",
+                "live": True,
+                "aadhaar_ref": "",
+                "expires_at": now,
+                "created_at": now,
+            }
+        )
+        self.app.store.mark_signup("old-signup", pan="ABCDE1234F", pan_ok=1)
+        self.assertIsNone(self.app.store.signup("old-signup"))
+
+    def test_retailer_cannot_sign_in_until_the_outlet_is_approved(self):
+        self.account("waiting@outlet.test", "retailer", approve=False)
+        status, body = self.request(
+            "POST",
+            "/api/auth/login",
+            {"email": "waiting@outlet.test", "password": "Counter-outlet-1042", "role": "retailer"},
+        )
+        self.assertEqual(status, 401)
+        self.assertEqual(body["error"], "Email or password is incorrect.")
 
     def test_login_hides_whether_the_email_exists(self):
         missing = self.request("POST", "/api/auth/login", {"email": "no@outlet.test", "password": "not-a-real-pass", "role": "retailer"})
         self.account("owner@outlet.test", "retailer")
         wrong = self.request("POST", "/api/auth/login", {"email": "owner@outlet.test", "password": "not-a-real-pass", "role": "retailer"})
         self.assertEqual(missing, wrong)
+        self.assertNotIn("auth_access", self.cookies)
+
+    def test_posted_admin_role_does_not_upgrade_a_retailer(self):
+        self.account("owner@outlet.test", "retailer")
+        status, body = self.request(
+            "POST",
+            "/api/auth/login",
+            {
+                "email": "owner@outlet.test",
+                "password": "Counter-outlet-1042",
+                "role": "admin",
+                "is_superadmin": True,
+            },
+        )
+        self.assertEqual(status, 401)
+        self.assertEqual(body["error"], "Email or password is incorrect.")
         self.assertNotIn("auth_access", self.cookies)
 
     def test_customer_password_does_not_open_the_retailer_counter(self):
@@ -638,7 +721,7 @@ class AuthTests(unittest.TestCase):
         status, body = self.request("GET", "/api/auth/desk/services", origin=self.base)
         self.assertEqual(status, 200, body)
         ids = [row["id"] for row in body["services"]]
-        self.assertEqual(ids, ["kaleyra", "email", "cashfree", "hub_api", "bbps", "pg", "parking"])
+        self.assertEqual(ids, ["kaleyra", "email", "cashfree", "hub_api", "bbps", "pg", "payu", "parking"])
         raw = json.dumps(body)
         self.assertNotIn("api_key", raw.lower())
         self.assertNotIn("secret", raw.lower())

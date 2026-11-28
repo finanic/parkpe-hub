@@ -135,6 +135,10 @@ CREATE TABLE IF NOT EXISTS account_profiles (
 class Store:
     def __init__(self, path: Path, scrypt_n: int):
         path.parent.mkdir(parents=True, exist_ok=True)
+        from core.privatefiles import restrict_private
+
+        restrict_private(path.parent)
+        restrict_private(path)
         self.scrypt_n = scrypt_n
         self._lock = threading.Lock()
         self._db = sqlite3.connect(path, check_same_thread=False)
@@ -172,6 +176,17 @@ class Store:
         self._ensure_column("account_profiles", "city", "TEXT NOT NULL DEFAULT ''")
         self._ensure_column("account_profiles", "address", "TEXT NOT NULL DEFAULT ''")
         self._ensure_column("account_profiles", "gstin", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("account_profiles", "udyam", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("account_profiles", "business_legal_name", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("account_profiles", "business_status", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("account_profiles", "shop_lat", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("account_profiles", "shop_lng", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("account_profiles", "location_source", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("account_profiles", "verification_ip", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("account_profiles", "business_note", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("signup_intents", "pan", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("signup_intents", "pan_name", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("signup_intents", "pan_registered_name", "TEXT NOT NULL DEFAULT ''")
         self._rename_operator_role()
         self._db.execute(
             "INSERT OR IGNORE INTO memberships (user_id, role) SELECT id, role FROM users"
@@ -461,6 +476,73 @@ class Store:
             )
         return people
 
+    def identity_in_use(self, *, pan: str = "", gstin: str = "", udyam: str = "", mobile: str = "") -> str:
+        """Which verified document is already on another account. Empty when clear."""
+        checks = (
+            ("pan", pan),
+            ("gstin", gstin),
+            ("udyam", udyam),
+            ("mobile", mobile),
+        )
+        with self._lock:
+            for kind, value in checks:
+                if not value:
+                    continue
+                row = self._db.execute(
+                    f"SELECT 1 FROM account_profiles WHERE role = 'retailer' AND {kind} = ? LIMIT 1",
+                    (value,),
+                ).fetchone()
+                if row:
+                    return kind
+        return ""
+
+    def save_outlet(
+        self,
+        user_id: str,
+        role: str,
+        *,
+        gstin: str,
+        udyam: str,
+        legal_name: str,
+        outlet_name: str,
+        shop_lat: str,
+        shop_lng: str,
+        verification_ip: str,
+        location_source: str = "desk",
+    ) -> None:
+        with self._lock:
+            self._db.execute(
+                """UPDATE account_profiles
+                   SET gstin = ?, udyam = ?, business_legal_name = ?, outlet_name = ?,
+                       shop_lat = ?, shop_lng = ?, verification_ip = ?, location_source = ?,
+                       business_status = 'pending_review'
+                   WHERE user_id = ? AND role = ?""",
+                (
+                    gstin,
+                    udyam,
+                    legal_name[:160],
+                    outlet_name[:80],
+                    shop_lat,
+                    shop_lng,
+                    verification_ip[:64],
+                    location_source[:16],
+                    user_id,
+                    role,
+                ),
+            )
+            self._db.commit()
+
+    def set_business_status(self, user_id: str, role: str, status: str, note: str = "") -> bool:
+        with self._lock:
+            cur = self._db.execute(
+                """UPDATE account_profiles
+                   SET business_status = ?, business_note = ?
+                   WHERE user_id = ? AND role = ? AND business_status = 'pending_review'""",
+                (status, note[:200], user_id, role),
+            )
+            self._db.commit()
+        return cur.rowcount == 1
+
     def set_sign_in(self, user_id: str, enabled: bool) -> None:
         with self._lock:
             self._db.execute(
@@ -644,7 +726,7 @@ class Store:
 
     def recent_signups(self, limit: int = 20) -> list[dict]:
         with self._lock:
-            self._keep_signups_open()
+            self._drop_expired_signups()
             rows = self._db.execute(
                 """SELECT id, email, mobile, role, email_ok, mobile_ok, aadhaar_ok, pan_ok,
                           aadhaar_ref, expires_at, created_at
@@ -681,7 +763,8 @@ class Store:
                 """SELECT u.id AS user_id, u.email, u.role, u.created_at AS user_created,
                           p.mobile_last4, p.email_ok, p.mobile_ok, p.aadhaar_ok, p.pan_ok,
                           p.pan_mask, p.digilocker_ref, p.pan_name_hint,
-                          p.created_at AS profile_created
+                          p.business_status, p.business_legal_name, p.shop_lat, p.shop_lng,
+                          u.sign_in, p.created_at AS profile_created
                    FROM users u
                    LEFT JOIN account_profiles p
                      ON p.user_id = u.id AND p.role = u.role
@@ -714,6 +797,11 @@ class Store:
                     "pan_mask": (row["pan_mask"] or "") if has_profile else "",
                     "digilocker_ref": (row["digilocker_ref"] or "") if has_profile else "",
                     "pan_name_hint": (row["pan_name_hint"] or "") if has_profile else "",
+                    "business_status": (row["business_status"] or "") if has_profile else "",
+                    "business_legal_name": (row["business_legal_name"] or "") if has_profile else "",
+                    "shop_lat": (row["shop_lat"] or "") if has_profile else "",
+                    "shop_lng": (row["shop_lng"] or "") if has_profile else "",
+                    "sign_in": bool(row["sign_in"]),
                     "verified_at": int(row["profile_created"] or row["user_created"]),
                 }
             )
@@ -897,7 +985,9 @@ class Store:
                 """SELECT role, mobile_last4, email_ok, mobile_ok, aadhaar_ok, pan_ok,
                           pan_mask, digilocker_ref, pan_name_hint, mobile, pan, pan_name,
                           pan_registered_name, digilocker_verification_id,
-                          display_name, outlet_name, city, address, gstin, created_at
+                          display_name, outlet_name, city, address, gstin, udyam,
+                          business_legal_name, business_status, shop_lat, shop_lng, location_source,
+                          verification_ip, business_note, created_at
                    FROM account_profiles WHERE user_id = ? ORDER BY role""",
                 (user_id,),
             ).fetchall()
@@ -922,6 +1012,14 @@ class Store:
                 "city": row["city"] or "",
                 "address": row["address"] or "",
                 "gstin": row["gstin"] or "",
+                "udyam": row["udyam"] or "",
+                "business_legal_name": row["business_legal_name"] or "",
+                "business_status": row["business_status"] or "",
+                "shop_lat": row["shop_lat"] or "",
+                "shop_lng": row["shop_lng"] or "",
+                "location_source": row["location_source"] or "",
+                "verification_ip": row["verification_ip"] or "",
+                "business_note": row["business_note"] or "",
                 "recorded_at": int(row["created_at"]),
             }
             for row in rows
@@ -994,7 +1092,14 @@ class Store:
                      outlet_name = excluded.outlet_name,
                      city = excluded.city,
                      address = excluded.address,
-                     gstin = excluded.gstin""",
+                     gstin = CASE
+                       WHEN business_status IN ('pending_review', 'approved') AND gstin != '' THEN gstin
+                       ELSE excluded.gstin
+                     END,
+                     outlet_name = CASE
+                       WHEN business_status IN ('pending_review', 'approved') AND outlet_name != '' THEN outlet_name
+                       ELSE excluded.outlet_name
+                     END""",
                 (
                     user_id,
                     role,
@@ -1148,7 +1253,7 @@ class Store:
 
     def signup(self, signup_id: str) -> sqlite3.Row | None:
         with self._lock:
-            self._keep_signups_open()
+            self._drop_expired_signups()
             return self._db.execute(
                 "SELECT * FROM signup_intents WHERE id = ?",
                 (signup_id,),
@@ -1165,6 +1270,9 @@ class Store:
             "aadhaar_ref",
             "pan_mask",
             "pan_name_hint",
+            "pan",
+            "pan_name",
+            "pan_registered_name",
             "email_code_hash",
             "sms_code_hash",
             "expires_at",
@@ -1193,14 +1301,15 @@ class Store:
             self._db.commit()
         return int(row["fails"]) if row else 0
 
-    def _keep_signups_open(self) -> None:
-        """Caller holds self._lock. Old rows may still carry a short desk TTL from before."""
-        from auth.verify import SIGNUP_INTENT_EXPIRES
+    def _drop_expired_signups(self) -> None:
+        """Caller holds self._lock. Drop unfinished signups, including any PAN on them."""
+        from auth.verify import SIGNUP_INTENT_TTL
 
         now = int(time.time())
+        cutoff = now - SIGNUP_INTENT_TTL
         self._db.execute(
-            "UPDATE signup_intents SET expires_at = ? WHERE expires_at < ?",
-            (SIGNUP_INTENT_EXPIRES, now),
+            "DELETE FROM signup_intents WHERE expires_at < ? OR created_at < ?",
+            (now, cutoff),
         )
         self._db.commit()
 

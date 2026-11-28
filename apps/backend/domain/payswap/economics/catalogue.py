@@ -167,11 +167,9 @@ def list_rate_rows(*, service: str = "bbps", category: str = "", q: str = "", li
         fetch_limit = max(1, min(int(limit), 2000))
         if cat or needle:
             ops = list_operators(category=cat or None, query=needle, limit=fetch_limit)
-            rate_map = {
-                (r.external_id, (r.category or "").upper()): r
-                for r in ServiceRateRow.objects.filter(service="bbps")
-            }
-            rate_by_op = {r.external_id: r for r in ServiceRateRow.objects.filter(service="bbps")}
+            rate_rows = list(ServiceRateRow.objects.filter(service="bbps"))
+            rate_map = {(r.external_id, (r.category or "").upper()): r for r in rate_rows}
+            rate_by_op = {r.external_id: r for r in rate_rows}
             rows = []
             for op in ops:
                 op_id = str(op.get("op") or "")

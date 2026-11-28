@@ -135,6 +135,18 @@ def _mask_pan(pan: str) -> str:
     return pan[:5] + "····" + pan[-1]
 
 
+def _tax_identity_from_row(email: str, row: tuple | None) -> dict[str, Any]:
+    empty = {"email": email, "name": "", "pan": "", "pan_mask": "", "found": False}
+    if not row:
+        return empty
+    name = next((str(part or "").strip() for part in row[:3] if str(part or "").strip()), "")
+    pan = str(row[3] or "").strip().upper()
+    if not PAN_RE.fullmatch(pan):
+        pan = ""
+    mask = str(row[4] or "").strip() or _mask_pan(pan)
+    return {"email": email, "name": name, "pan": pan, "pan_mask": mask, "found": True}
+
+
 def retailer_tax_identity(user_id: str) -> dict[str, Any]:
     """Deductee name and PAN for a TDS row.
 
@@ -173,14 +185,53 @@ def retailer_tax_identity(user_id: str) -> dict[str, Any]:
                 ).fetchone()
     except sqlite3.Error:
         return empty
-    if not row:
-        return empty
-    name = next((str(part or "").strip() for part in row[:3] if str(part or "").strip()), "")
-    pan = str(row[3] or "").strip().upper()
-    if not PAN_RE.fullmatch(pan):
-        pan = ""
-    mask = str(row[4] or "").strip() or _mask_pan(pan)
-    return {"email": email, "name": name, "pan": pan, "pan_mask": mask, "found": True}
+    return _tax_identity_from_row(email, row)
+
+
+def retailer_tax_identities(user_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Batch PAN/name lookup for TDS desk tables (one SQLite open)."""
+    emails = sorted({str(uid or "").strip().lower() for uid in user_ids if str(uid or "").strip()})
+    out = {
+        email: {"email": email, "name": "", "pan": "", "pan_mask": "", "found": False} for email in emails
+    }
+    if not emails:
+        return out
+    db = _auth_sqlite_for_tds()
+    if not db:
+        return out
+    try:
+        with sqlite3.connect(str(db)) as conn:
+            placeholders = ",".join("?" for _ in emails)
+            rows = conn.execute(
+                f"""SELECT lower(u.email), IFNULL(p.display_name, ''), IFNULL(p.pan_name, ''),
+                           IFNULL(p.pan_name_hint, ''), IFNULL(p.pan, ''), IFNULL(p.pan_mask, '')
+                    FROM users u
+                    LEFT JOIN account_profiles p
+                      ON p.user_id = u.id AND p.role = 'retailer'
+                    WHERE lower(u.email) IN ({placeholders})""",
+                emails,
+            ).fetchall()
+            for row in rows:
+                email = str(row[0] or "").strip().lower()
+                if email in out:
+                    out[email] = _tax_identity_from_row(email, row[1:])
+            missing = [email for email, who in out.items() if not who["found"]]
+            if missing:
+                placeholders = ",".join("?" for _ in missing)
+                profile_rows = conn.execute(
+                    f"""SELECT lower(user_id), IFNULL(display_name, ''), IFNULL(pan_name, ''),
+                               IFNULL(pan_name_hint, ''), IFNULL(pan, ''), IFNULL(pan_mask, '')
+                        FROM account_profiles
+                        WHERE role = 'retailer' AND lower(user_id) IN ({placeholders})""",
+                    missing,
+                ).fetchall()
+                for row in profile_rows:
+                    email = str(row[0] or "").strip().lower()
+                    if email in out and not out[email]["found"]:
+                        out[email] = _tax_identity_from_row(email, row[1:])
+    except sqlite3.Error:
+        return out
+    return out
 
 
 def _certificate_for(user_id: str, on_date: date) -> RetailerTdsCertificate | None:
@@ -515,11 +566,12 @@ def reject_tds_certificate(*, certificate_id: int, actor: str = "", reason: str 
 
 
 def list_tds_certificates() -> dict[str, Any]:
-    rows = RetailerTdsCertificate.objects.order_by("-id")[:100]
+    rows = list(RetailerTdsCertificate.objects.order_by("-id")[:100])
+    who_map = retailer_tax_identities([row.user_id for row in rows])
     items = []
     for row in rows:
         item = _serialize_certificate(row) or {}
-        who = retailer_tax_identity(row.user_id)
+        who = who_map.get(str(row.user_id or "").strip().lower()) or {}
         item["pan_on_file"] = bool(who.get("pan"))
         item["name"] = who.get("name") or ""
         items.append(item)
@@ -619,8 +671,19 @@ def update_policy(*, actor: str = "", sync_bbps: bool = True, **fields: Any) -> 
                 tds_threshold_paise=row.tds_threshold_paise,
                 withhold_tds_always=row.withhold_tds_always,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            log_action(
+                action="domain.payswap.commission.policy.sync",
+                outcome="error",
+                status=500,
+                duration_ms=0,
+                target_id=row.key,
+                error_code="sync_failed",
+                error_reason=str(exc)[:200],
+                request="sync_bbps=1",
+                response="HTTP 500\neconomics policy dual-write failed",
+            )
+            raise
     log_action(
         action="domain.payswap.commission.policy",
         outcome="ok",
@@ -1088,21 +1151,20 @@ def update_retailer_override(
                 "updated_by": actor or "",
             },
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        log_action(
+            action="domain.payswap.commission.override.sync",
+            outcome="error",
+            status=500,
+            duration_ms=0,
+            target_id=user_id,
+            error_code="sync_failed",
+            error_reason=str(exc)[:200],
+            request="RetailerServiceOverride dual-write",
+            response="HTTP 500\neconomics override dual-write failed",
+        )
+        raise
     return serialize_retailer_override(row)
-
-
-def _find_catalogue_rate(operator_id: str, category: str) -> VendorCommissionRate | None:
-    op = str(operator_id or "").strip()
-    cat = str(category or "").strip()
-    if not op:
-        return None
-    if cat:
-        row = VendorCommissionRate.objects.filter(operator_id=op, category__iexact=cat).first()
-        if row:
-            return row
-    return VendorCommissionRate.objects.filter(operator_id=op).order_by("id").first()
 
 
 def resolve_rate(*, operator_id: str, category: str, retailer_id: str = "") -> dict[str, Any] | None:
@@ -1292,21 +1354,26 @@ def tds_month_report(*, month: str = "") -> dict[str, Any]:
     missing: list[str] = []
     if not tan:
         missing.append("Company TAN is not saved.")
+    who_map = retailer_tax_identities([bucket["user_id"] for bucket in by_user.values()])
     retailers = []
     for bucket in sorted(by_user.values(), key=lambda item: item["user_id"]):
-        who = retailer_tax_identity(bucket["user_id"])
-        if int(bucket["open_paise"]) > 0 and not who["pan"]:
+        who = who_map.get(str(bucket["user_id"] or "").strip().lower()) or {
+            "name": "",
+            "pan": "",
+            "pan_mask": "",
+        }
+        if int(bucket["open_paise"]) > 0 and not who.get("pan"):
             missing.append(f"{bucket['user_id']} has no PAN on the account file. New credits use Section 206AA.")
-        if int(bucket["open_paise"]) > 0 and not who["name"]:
+        if int(bucket["open_paise"]) > 0 and not who.get("name"):
             missing.append(f"{bucket['user_id']} has no name on the account file.")
         challan = _challan_label(bucket)
         retailers.append(
             {
                 "user_id": bucket["user_id"],
-                "name": who["name"],
-                "pan": who["pan"],
-                "pan_mask": who["pan_mask"],
-                "pan_on_file": bool(who["pan"]),
+                "name": who.get("name") or "",
+                "pan": who.get("pan") or "",
+                "pan_mask": who.get("pan_mask") or "",
+                "pan_on_file": bool(who.get("pan")),
                 "section": TDS_SECTION,
                 "tds_basis_label": bucket["bases"][0] if len(bucket["bases"]) == 1 else ("mixed" if bucket["bases"] else "194H"),
                 "credited_from": bucket["credited_from"],

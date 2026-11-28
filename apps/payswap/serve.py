@@ -18,7 +18,7 @@ CSP = (
     "default-src 'self'; "
     "style-src 'self' https://fonts.googleapis.com; "
     "font-src https://fonts.gstatic.com; "
-    "img-src 'self' data: https://static.mobikwik.com; "
+    "img-src 'self' data: https://static.mobikwik.com https://www.google.com https://*.gstatic.com; "
     "script-src 'self'; "
     "connect-src 'self' http://127.0.0.1:4600 http://127.0.0.1:4610 http://localhost:4600 http://localhost:4610; "
     "base-uri 'none'; frame-ancestors 'none'"

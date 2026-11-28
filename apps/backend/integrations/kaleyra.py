@@ -1,9 +1,9 @@
 """Kaleyra OTP SMS for auth.verify.LiveVerify.send_sms.
 
-Credentials stay in the environment, or in apps/backend/data/kaleyra.env
-when that file exists. That directory is gitignored. Django settings in
-config/settings.py do not carry them. A customer signup uses the ParkPe
-sender and DLT template. A retailer signup uses the PaySwap pair.
+Credentials stay in apps/backend/.env (loaded by config.envfile), or in
+apps/backend/data/kaleyra.env as a fallback. That data directory is
+gitignored. Django settings do not carry them. A customer signup uses the
+ParkPe sender and DLT template. A retailer signup uses the PaySwap pair.
 auth.server._signup_start and _signup_resend pass that role and still
 audit signup_delivery_failed in auth/store.py. The OTP check in
 auth.server._signup_contact hashes the code locally and does not call Kaleyra.
@@ -54,8 +54,9 @@ class SmsResult:
 
 
 def load_local_env(path: Path | None = None) -> None:
-    """Fill unset KALEYRA_* keys. auth.server.main reads data/kaleyra.env.
+    """Fill unset KALEYRA_* keys from data/kaleyra.env (fallback).
 
+    Prefer apps/backend/.env via config.envfile.load_backend_env first.
     A value already in the environment wins. Other names in the file are ignored.
     """
     file = path or Path(__file__).resolve().parents[1] / "data" / "kaleyra.env"

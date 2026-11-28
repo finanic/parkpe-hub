@@ -56,18 +56,24 @@ from auth.security import (
 from auth.store import Store
 from core.actions import set_action_sink
 from auth.verify import (
-    SIGNUP_INTENT_EXPIRES,
+    signup_expires_at,
     LiveVerify,
     cashfree_configured,
     mail_configured,
     mask_digilocker_ref,
+    gstin_embeds_pan,
     mask_pan,
     mask_pan_name,
+    names_overlap,
+    normalize_gstin,
     normalize_mobile,
     normalize_pan,
+    normalize_shop_point,
+    normalize_udyam,
 )
 from integrations import bbps as bbps_integration
 from integrations import kaleyra
+from integrations import payu as payu_integration
 from integrations import pg as pg_integration
 
 def _split_csv(value: str) -> set[str]:
@@ -117,10 +123,14 @@ _API_SERVICES = (
     ("integration.kaleyra", "Kaleyra"),
     ("integration.mail", "Email"),
     ("integration.cashfree", "Cashfree"),
+    ("integration.payu", "PayU"),
+    ("payswap.payu", "PayU"),
     ("integration.parking", "Parking"),
     ("integration.bbps", "BBPS"),
     ("domain.payswap.bbps", "BBPS"),
     ("payswap.bbps", "BBPS"),
+    ("desk.bbps", "BBPS"),
+    ("desk.transactions.bbps", "BBPS"),
     ("domain.parkpe", "ParkPe"),
     ("parkpe.", "ParkPe"),
     ("domain.payswap", "PaySwap"),
@@ -212,6 +222,10 @@ class AuthApp:
                 self._signup_aadhaar_confirm(request, body, ip, origin)
             elif method == "POST" and path == Paths.SIGNUP_PAN:
                 self._signup_pan(request, body, ip, origin)
+            elif method == "POST" and path == Paths.SIGNUP_BUSINESS:
+                self._signup_business(request, body, ip, origin)
+            elif method == "POST" and path == Paths.DESK_BUSINESS_REVIEW:
+                self._business_review(request, body, ip, origin)
             elif method == "POST" and path == Paths.SIGNUP_CANCEL:
                 self._signup_cancel(request, body, ip, origin)
             elif method == "POST" and path == Paths.SIGNUP_RESEND:
@@ -274,6 +288,8 @@ class AuthApp:
                 self._hub(request, origin, "GET", "/api/v1/desk/entitlements/default")
             elif method == "POST" and path == Paths.DESK_ENTITLEMENTS_DEFAULT:
                 self._hub(request, origin, "POST", "/api/v1/desk/entitlements/default", body)
+            elif method == "GET" and path == Paths.DESK_ENTITLEMENTS_DEFAULT_BBPS_BILLERS:
+                self._hub(request, origin, "GET", "/api/v1/desk/entitlements/default/bbps-billers")
             elif method == "GET" and path == Paths.DESK_ENTITLEMENTS_RETAILER:
                 self._hub(request, origin, "GET", "/api/v1/desk/entitlements/retailer")
             elif method == "POST" and path == Paths.DESK_ENTITLEMENTS_RETAILER:
@@ -284,12 +300,24 @@ class AuthApp:
                 self._hub(request, origin, "POST", "/api/v1/desk/wallets/topup-review", body)
             elif method == "POST" and path == Paths.DESK_WALLETS_ADJUST:
                 self._hub(request, origin, "POST", "/api/v1/desk/wallets/adjust", body)
+            elif method == "POST" and path == Paths.DESK_WALLETS_ADJUST_REVIEW:
+                self._hub(request, origin, "POST", "/api/v1/desk/wallets/adjust-review", body)
             elif method == "POST" and path == Paths.DESK_WALLETS_CONTROLS:
                 self._hub(request, origin, "POST", "/api/v1/desk/wallets/controls", body)
             elif method == "GET" and path == Paths.DESK_TRANSACTIONS:
                 self._hub(request, origin, "GET", "/api/v1/desk/transactions")
             elif method == "POST" and path == Paths.DESK_TRANSACTIONS_BBPS_SYNC:
                 self._hub(request, origin, "POST", "/api/v1/desk/transactions/bbps-sync", body)
+            elif method == "POST" and path == Paths.DESK_TRANSACTIONS_PG_SYNC:
+                self._hub(request, origin, "POST", "/api/v1/desk/transactions/pg-sync", body)
+            elif method == "GET" and path == Paths.DESK_BBPS_BULK:
+                self._hub(request, origin, "GET", "/api/v1/desk/bbps/bulk")
+            elif method == "GET" and path.startswith(Paths.DESK_BBPS_BULK + "/"):
+                batch_id = path[len(Paths.DESK_BBPS_BULK) + 1 :].strip("/")
+                self._hub(request, origin, "GET", f"/api/v1/desk/bbps/bulk/{batch_id}")
+            elif method == "POST" and path.startswith(Paths.DESK_BBPS_BULK + "/"):
+                batch_id = path[len(Paths.DESK_BBPS_BULK) + 1 :].strip("/")
+                self._hub(request, origin, "POST", f"/api/v1/desk/bbps/bulk/{batch_id}", body)
             elif method == "GET" and path == Paths.DESK_COMMISSION_POLICY:
                 self._hub(request, origin, "GET", "/api/v1/desk/commission/policy")
             elif method == "POST" and path == Paths.DESK_COMMISSION_POLICY:
@@ -994,6 +1022,20 @@ class AuthApp:
                     "duration_ms": row["duration_ms"],
                     "at": row["at"],
                 }
+        for row in self._hub_entries(request, "/api/v1/desk/actions?limit=40"):
+            action = str(row.get("action") or "")
+            if not action:
+                continue
+            service = _api_service(action)
+            if service in latest:
+                continue
+            latest[service] = {
+                "action": action,
+                "outcome": row.get("outcome") or "",
+                "status": row.get("status") or 0,
+                "duration_ms": row.get("duration_ms") or 0,
+                "at": row.get("at") or 0,
+            }
         hub_base = os.environ.get("HUB_API_ORIGIN", "http://127.0.0.1:4610").rstrip("/")
         hub_up = self._health_ok(hub_base + "/api/v1/health/")
         kaleyra_parkpe = kaleyra.configured("customer")
@@ -1003,6 +1045,7 @@ class AuthApp:
         cashfree_ready = cashfree_configured()
         bbps_ready = bbps_integration.configured()
         pg_ready = pg_integration.pg_configured()
+        payu_ready = payu_integration.payu_configured()
         hub_last = latest.get("ParkPe") or latest.get("PaySwap") or latest.get("Idempotency")
         services = [
             {
@@ -1080,7 +1123,7 @@ class AuthApp:
                 "kind": "External provider",
                 "state": "ready" if pg_ready else "warn",
                 "status_label": "Configured" if pg_ready else "Not configured",
-                "summary": "Handles retailer PG wallet top-ups and direct PG bill payments when enabled.",
+                "summary": "Cashfree PG for retailer wallet top-ups and direct bill pay when admin policy allows it.",
                 "routes": [
                     "/api/v1/payswap/pg/order",
                     "/api/v1/payswap/pg/verify",
@@ -1088,6 +1131,22 @@ class AuthApp:
                 ],
                 "log_filter": "PaySwap",
                 "last_call": latest.get("PaySwap"),
+            },
+            {
+                "id": "payu",
+                "name": "PayU Hosted Checkout",
+                "kind": "External provider",
+                "state": "ready" if payu_ready else "warn",
+                "status_label": "Configured" if payu_ready else "Not configured",
+                "summary": "PayU web redirect for wallet top-up and direct PG pay. Admin PG provider policy can live PayU, Cashfree, or both.",
+                "routes": [
+                    "/api/payu/initiate",
+                    "/api/payu/success",
+                    "/api/payu/failure",
+                    "/api/payu/verify/<order_id>",
+                ],
+                "log_filter": "PayU",
+                "last_call": latest.get("PayU"),
             },
             {
                 "id": "parking",
@@ -1139,6 +1198,9 @@ class AuthApp:
         }
         if data is not None:
             headers["Content-Type"] = "application/json"
+        idem = (request.headers.get("Idempotency-Key") or "").strip()
+        if idem:
+            headers["Idempotency-Key"] = idem[:200]
         outgoing = urllib.request.Request(base + upstream_path, data=data, headers=headers, method=method)
         try:
             with urllib.request.urlopen(outgoing, timeout=20) as response:
@@ -1161,7 +1223,7 @@ class AuthApp:
         self._json(request, status, payload, origin)
 
     def _logs(self, request, origin) -> None:
-        """Logs screen. User actions are audit rows. API lines are provider calls plus /api/v1."""
+        """Logs screen. User actions are audit rows. API lines are auth service_log plus Django HubAction."""
         if not self._desk_session(request, origin):
             return
         actions = [
@@ -1199,7 +1261,32 @@ class AuthApp:
                     "why": _api_why(row["outcome"], row["error_reason"]),
                 }
             )
-        self._json(request, 200, {"actions": actions, "api": api}, origin)
+        # BBPS / PaySwap / ParkPe money lines live in hub.sqlite HubAction, not auth service_log.
+        for row in self._hub_entries(request, "/api/v1/desk/actions?limit=120"):
+            action = str(row.get("action") or "")
+            if not action:
+                continue
+            api.append(
+                {
+                    "id": f"H-{row.get('id')}",
+                    "at": row.get("at") or 0,
+                    "service": _api_service(action),
+                    "action": action,
+                    "actor": row.get("actor") or "",
+                    "role": row.get("role") or "",
+                    "target_id": row.get("target_id") or "",
+                    "outcome": row.get("outcome") or "",
+                    "status": row.get("status") or 0,
+                    "duration_ms": row.get("duration_ms") or 0,
+                    "error_code": row.get("error_code") or "",
+                    "error_reason": row.get("error_reason") or "",
+                    "request": row.get("request") or "",
+                    "response": row.get("response") or "",
+                    "why": _api_why(str(row.get("outcome") or ""), str(row.get("error_reason") or "")),
+                }
+            )
+        api.sort(key=lambda row: (int(row.get("at") or 0), str(row.get("id") or "")), reverse=True)
+        self._json(request, 200, {"actions": actions, "api": api[:160]}, origin)
 
     def _hub_entries(self, request, upstream: str) -> list:
         """Read a Django desk list. A down hub leaves the local provider lines in place."""
@@ -1565,7 +1652,7 @@ class AuthApp:
                 "email_code_hash": token_hash(email_code),
                 "sms_code_hash": token_hash(sms_code),
                 "live": True,
-                "expires_at": SIGNUP_INTENT_EXPIRES,
+                "expires_at": signup_expires_at(now),
                 "created_at": now,
             }
         )
@@ -1721,16 +1808,129 @@ class AuthApp:
             )
             self._json(request, 400, {"error": "Verification did not succeed."}, origin)
             return
+        if self.store.identity_in_use(pan=pan):
+            self._json(request, 400, {"error": "This PAN is already on an account."}, origin)
+            return
         self.store.mark_signup(
             intent["id"],
             pan_ok=1,
             pan_mask=mask_pan(pan),
             pan_name_hint=mask_pan_name(name),
+            pan=pan,
+            pan_name=name,
+            pan_registered_name=pan_registered,
         )
+        self._json(request, 200, {"ok": True, "account_ready": False, "business_required": True}, origin)
+
+    def _signup_business(self, request, body, ip, origin) -> None:
+        if not self._require_operator(request, origin):
+            return
+        intent = self._live_signup(body.get("signup_id"))
+        gstin = normalize_gstin(body.get("gstin"))
+        udyam = normalize_udyam(body.get("udyam"))
+        point = normalize_shop_point(body.get("lat"), body.get("lng"))
+        outlet = body.get("outlet_name") if isinstance(body.get("outlet_name"), str) else ""
+        outlet = " ".join(outlet.split())
+        pan = self._signup_field(intent, "pan") if intent else ""
+        if (
+            intent is None
+            or intent["role"] != ROLE_RETAILER
+            or not intent["pan_ok"]
+            or not gstin
+            or not udyam
+            or point is None
+            or len(outlet) < 2
+        ):
+            self._json(request, 400, {"error": "Business verification did not succeed."}, origin)
+            return
+        if body.get("location_source") != "desk":
+            self._json(request, 400, {"error": "Capture this desk's location before continuing."}, origin)
+            return
+        if not gstin_embeds_pan(gstin, pan):
+            self._json(request, 400, {"error": "GSTIN does not match the PAN on this signup."}, origin)
+            return
+        taken = self.store.identity_in_use(gstin=gstin, udyam=udyam, mobile=intent["mobile"] or "")
+        if taken == "gstin":
+            self._json(request, 400, {"error": "This GSTIN is already on an account."}, origin)
+            return
+        if taken == "udyam":
+            self._json(request, 400, {"error": "This Udyam number is already on an account."}, origin)
+            return
+        if taken == "mobile":
+            self._json(request, 400, {"error": "This mobile number is already on an account."}, origin)
+            return
+        gst_ok, gst = self.verifiers.gstin_verify(gstin)
+        udyam_ok, enterprise = self.verifiers.udyam_verify(udyam, intent["id"])
+        legal = str(gst.get("legal_name") or gst.get("trade_name") or "")
+        if not gst_ok or not udyam_ok or not names_overlap(legal, enterprise):
+            self.store.audit(
+                "signup_rejected",
+                ip,
+                intent["user_id"],
+                request=f"POST /api/auth/signup/business\n{json.dumps({'signup_id': intent['id']})}",
+                response='HTTP 400\n{"error":"Business verification did not succeed."}',
+            )
+            message = "GST and Udyam are not the same business." if gst_ok and udyam_ok else "Business verification did not succeed."
+            self._json(request, 400, {"error": message}, origin)
+            return
         ready = self._open_verified_account(
-            intent, pan=pan, pan_name=name, pan_registered_name=pan_registered
+            intent,
+            pan=pan,
+            pan_name=self._signup_field(intent, "pan_name"),
+            pan_registered_name=self._signup_field(intent, "pan_registered_name"),
+            sign_in=False,
         )
-        self._json(request, 200, {"ok": True, "account_ready": ready}, origin)
+        created = self.store.user_by_email_role(intent["email"], ROLE_RETAILER)
+        if ready and created:
+            lat, lng = point
+            self.store.save_outlet(
+                created["id"],
+                ROLE_RETAILER,
+                gstin=gstin,
+                udyam=udyam,
+                legal_name=legal,
+                outlet_name=outlet,
+                shop_lat=lat,
+                shop_lng=lng,
+                verification_ip=ip,
+            )
+        self._json(
+            request,
+            200,
+            {
+                "ok": True,
+                "account_ready": ready,
+                "sign_in": False,
+                "business_status": "pending_review",
+                "legal_name": legal,
+            },
+            origin,
+        )
+
+    def _business_review(self, request, body, ip, origin) -> None:
+        if not self._require_operator(request, origin):
+            return
+        email = normalize_email(body.get("email"))
+        decision = body.get("decision") if isinstance(body.get("decision"), str) else ""
+        note = body.get("note") if isinstance(body.get("note"), str) else ""
+        note = " ".join(note.split())[:200]
+        user = self.store.user_by_email_role(email, ROLE_RETAILER) if email else None
+        if user is None or decision not in {"approve", "reject"}:
+            self._json(request, 400, {"error": "That outlet review is not open."}, origin)
+            return
+        status = "approved" if decision == "approve" else "rejected"
+        if not self.store.set_business_status(user["id"], ROLE_RETAILER, status, note):
+            self._json(request, 400, {"error": "That outlet review is not open."}, origin)
+            return
+        self.store.set_sign_in(user["id"], decision == "approve")
+        self.store.audit(
+            "business_approved" if decision == "approve" else "business_rejected",
+            ip,
+            user["id"],
+            request=f"POST /api/auth/desk/business-review\n{json.dumps({'email': user['email'], 'decision': decision})}",
+            response=f"HTTP 200\n{json.dumps({'ok': True, 'sign_in': decision == 'approve'})}",
+        )
+        self._json(request, 200, {"ok": True, "email": user["email"], "sign_in": decision == "approve", "business_status": status}, origin)
 
     def _signup_cancel(self, request, body, ip, origin) -> None:
         if not self._require_operator(request, origin):
@@ -1774,7 +1974,7 @@ class AuthApp:
             intent["id"],
             email_code_hash=token_hash(email_code),
             sms_code_hash=token_hash(sms_code),
-            expires_at=SIGNUP_INTENT_EXPIRES,
+            expires_at=signup_expires_at(),
         )
         self.store.audit(
             "signup_resent",
@@ -1800,6 +2000,7 @@ class AuthApp:
         pan_name: str = "",
         *,
         pan_registered_name: str = "",
+        sign_in: bool = True,
     ) -> bool:
         stored = self.store.signup_any(intent["id"]) or intent
         if not self.store.create_user_with_hash(stored["email"], stored["password_hash"], stored["role"]):
@@ -1828,6 +2029,8 @@ class AuthApp:
                 pan_registered_name=pan_registered_name,
                 digilocker_verification_id=digi_full,
             )
+            if not sign_in:
+                self.store.set_sign_in(user_id, False)
         self.store.delete_signup(stored["id"])
         self.store.audit(
             "signup_account",
@@ -1940,9 +2143,13 @@ CONSOLE_FILES = {
 
 def main() -> None:
     from auth.verify import load_cashfree_env, load_mail_env, _cashfree_ready
+    from config.envfile import load_backend_env
     from integrations.bbps import configured as bbps_ready, load_local_env as load_bbps_env
     from integrations.kaleyra import load_local_env
 
+    # apps/backend/.env first (Kaleyra, mail, Mobikwik, Cashfree, PayU).
+    # data/*.env loaders below stay as optional fallbacks.
+    load_backend_env()
     load_local_env()
     load_mail_env()
     load_cashfree_env()
@@ -1953,6 +2160,9 @@ def main() -> None:
     print("Mail config ready" if mail_ready else "Mail config missing", flush=True)
     print("Cashfree verification ready" if _cashfree_ready() else "Cashfree verification missing", flush=True)
     print("Mobikwik BBPS ready" if bbps_ready() else "Mobikwik BBPS missing", flush=True)
+    from integrations.payu import payu_configured as _payu_ready
+
+    print("PayU hosted checkout ready" if _payu_ready() else "PayU hosted checkout missing", flush=True)
     root = Path(__file__).resolve().parents[1]
     data_dir = Path(os.environ.get("AUTH_DATA_DIR", root / "data"))
     origins = _split_csv(
@@ -1964,8 +2174,11 @@ def main() -> None:
     host = os.environ.get("AUTH_HOST", "127.0.0.1")
     port = int(os.environ.get("AUTH_PORT", "4600"))
     cookie_secure = os.environ.get("AUTH_COOKIE_SECURE", "0") == "1"
+    https_origin = any(item.startswith("https://") for item in origins)
     if host not in {"127.0.0.1", "localhost", "::1"} and not cookie_secure:
         raise SystemExit("Set AUTH_COOKIE_SECURE=1 for a non-loopback AUTH_HOST.")
+    if https_origin and not cookie_secure:
+        raise SystemExit("Set AUTH_COOKIE_SECURE=1 when AUTH_ORIGINS includes https.")
     origins.add(f"http://{host}:{port}")
     if host in {"127.0.0.1", "localhost"}:
         origins.add(f"http://127.0.0.1:{port}")

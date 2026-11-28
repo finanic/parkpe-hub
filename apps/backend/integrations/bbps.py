@@ -1,6 +1,6 @@
 """Mobikwik BBPS client and operator catalogue for domain/payswap/bbps.py.
 
-Credentials stay in the environment, or in apps/backend/data/mobikwik.env
+Credentials stay in apps/backend/.env (config.envfile), or apps/backend/data/mobikwik.env
 when that file exists. Operators.xlsx and public_key.pem stay under
 apps/backend/data/mobikwik/. That directory is gitignored.
 """
@@ -11,6 +11,7 @@ import base64
 import fcntl
 import json
 import os
+import re
 import secrets
 import ssl
 import threading
@@ -26,7 +27,7 @@ from zoneinfo import ZoneInfo
 
 from core.actions import elapsed_ms, log_action
 
-_DEFAULT_BASE = "https://rapi-b2b.mobikwik.com"
+# No silent prod host fallback: MOBIKWIK_BBPS_BASE_URL must be set when enabled.
 _DEFAULT_PATHS = {
     "token": "/recharge/v1/verify/retailer",
     "balance": "/recharge/v3/retailerBalance",
@@ -34,7 +35,7 @@ _DEFAULT_PATHS = {
     "view_bill": "/recharge/v3/retailerViewbill",
     "pay": "/recharge/v3/retailerPayment",
     "status": "/recharge/v3/retailerStatus",
-    # GET — prepaid/DTH plan catalogue (op + cir + cn). Same path also lists operators when bare.
+    # GET — one plan catalogue for a known operator and circle. No operator-detect call.
     "plans": "/recharge/v1/rechargePlansAPI",
 }
 # Mobikwik numeric circle codes for prepaid rechargePlansAPI / pay `cir`.
@@ -178,6 +179,7 @@ _FAILED_STATUSES = frozenset(
 
 _TOKEN_LOCK = threading.Lock()
 _MEM_TOKEN: dict[str, Any] = {}
+_MINT_HOLD_UNTIL = 0.0
 _CAT_LOCK = threading.Lock()
 _CAT_CACHE: tuple[float, list[dict[str, Any]]] | None = None
 
@@ -198,7 +200,10 @@ def _truthy(value: str | None, default: bool = False) -> bool:
 
 
 def load_local_env(path: Path | None = None) -> None:
-    """Fill unset MOBIKWIK_BBPS_* keys from apps/backend/data/mobikwik.env."""
+    """Fill unset MOBIKWIK_BBPS_* keys from data/mobikwik.env (fallback).
+
+    Prefer apps/backend/.env via config.envfile.load_backend_env first.
+    """
     file = path or (_data_dir() / "mobikwik.env")
     try:
         text = file.read_text()
@@ -241,9 +246,9 @@ def _public_key_pem() -> str:
 def _config() -> dict[str, Any] | None:
     if not _truthy(os.environ.get("MOBIKWIK_BBPS_ENABLED")):
         return None
-    base = os.environ.get("MOBIKWIK_BBPS_BASE_URL", _DEFAULT_BASE).strip().rstrip("/")
+    base = os.environ.get("MOBIKWIK_BBPS_BASE_URL", "").strip().rstrip("/")
     parsed = urllib.parse.urlparse(base)
-    if parsed.scheme != "https" or not parsed.netloc:
+    if not base or parsed.scheme != "https" or not parsed.netloc:
         return None
     client_id = os.environ.get("MOBIKWIK_BBPS_CLIENT_ID", "").strip()
     client_secret = os.environ.get("MOBIKWIK_BBPS_CLIENT_SECRET", "").strip()
@@ -449,6 +454,7 @@ def _write_cached_token(token: str, expires_at: float) -> None:
         "renew_at": _compute_renew_at(now, expires_at),
         "mint_date": today,
         "mint_count": prev_count + 1,
+        "mint_hold_until": float(prev.get("mint_hold_until") or 0),
     }
     _MEM_TOKEN.clear()
     _MEM_TOKEN.update(entry)
@@ -459,7 +465,11 @@ def _clear_cached_token() -> None:
     prev = _load_token_state()
     _MEM_TOKEN.clear()
     if prev.get("mint_date") == _today_ist() and prev.get("mint_count"):
-        _save_token_state({"mint_date": prev["mint_date"], "mint_count": int(prev["mint_count"])})
+        _save_token_state({
+            "mint_date": prev["mint_date"],
+            "mint_count": int(prev["mint_count"]),
+            "mint_hold_until": float(prev.get("mint_hold_until") or 0),
+        })
         return
     try:
         _token_cache_path().unlink()
@@ -539,18 +549,44 @@ def _is_token_expired(status: int, data: Any) -> bool:
     return False
 
 
+def _mint_hold_remaining() -> float:
+    disk_until = float(_load_token_state().get("mint_hold_until") or 0)
+    return max(0.0, _MINT_HOLD_UNTIL - time.time(), disk_until - time.time())
+
+
+def _hold_mint(seconds: float) -> None:
+    """One rejected mint pauses the next one, including in another process."""
+    global _MINT_HOLD_UNTIL
+    until = time.time() + max(30.0, seconds)
+    _MINT_HOLD_UNTIL = max(_MINT_HOLD_UNTIL, until)
+    state = _load_token_state()
+    state["mint_hold_until"] = max(float(state.get("mint_hold_until") or 0), until)
+    _save_token_state(state)
+
+
 def _ensure_token(cfg: dict[str, Any], *, force: bool = False, transport=None) -> tuple[str | None, str]:
     with _TOKEN_LOCK:
         lock_path = _token_lock_path()
         lock_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(lock_path.parent, 0o700)
+        except OSError:
+            pass
         with lock_path.open("a+") as lock_file:
+            try:
+                os.chmod(lock_path, 0o600)
+            except OSError:
+                pass
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
             try:
                 if not force:
                     cached = _read_cached_token()
                     if cached:
                         return cached, ""
-                else:
+                wait = _mint_hold_remaining()
+                if wait > 0:
+                    return None, "Mobikwik token mint is paused after a rejected request. Wait before trying again."
+                if force:
                     _clear_cached_token()
 
                 if _daily_mint_count() >= _max_mints_per_day():
@@ -617,6 +653,11 @@ def _mint_new_token(cfg: dict[str, Any], *, transport=None) -> tuple[str | None,
         resp_log = _exchange_response(status, raw)
         if not token:
             reason = _vendor_msg(data, "Mobikwik rejected the token request.")
+            if status == 429:
+                reason = "Mobikwik rate limit. Wait before asking for another token."
+                _hold_mint(60.0)
+            else:
+                _hold_mint(120.0)
             log_action(
                 action="integration.bbps.token",
                 outcome="error",
@@ -747,9 +788,10 @@ def _request_get(
     *,
     target_id: str = "",
     transport=None,
+    path_override: str = "",
     _retry: int = 0,
 ) -> dict[str, Any]:
-    """GET helper for rechargePlansAPI (query params, no encrypted body)."""
+    """GET helper for rechargePlansAPI and operator lookup (query params, no encrypted body)."""
     started = time.perf_counter()
     cfg = _config()
     if cfg is None:
@@ -776,7 +818,7 @@ def _request_get(
         headers["X-Merchant-Id"] = cfg["merchant_id"]
 
     clean = {str(k): str(v) for k, v in params.items() if v not in (None, "")}
-    url = cfg["base"] + _DEFAULT_PATHS[path_key]
+    url = path_override or (cfg["base"] + _DEFAULT_PATHS[path_key])
     if clean:
         url = f"{url}?{urllib.parse.urlencode(clean)}"
     req_log = _exchange_request(url.split("?", 1)[0], clean, method="GET")
@@ -817,7 +859,15 @@ def _request_get(
 
     if _retry < 1 and cfg["client_id"] and cfg["client_secret"] and _is_token_expired(status, data):
         _ensure_token(cfg, force=True)
-        return _request_get(action, path_key, params, target_id=target_id, transport=transport, _retry=_retry + 1)
+        return _request_get(
+            action,
+            path_key,
+            params,
+            target_id=target_id,
+            transport=transport,
+            path_override=path_override,
+            _retry=_retry + 1,
+        )
 
     body_ok = True if not isinstance(data, dict) else (data.get("success") is not False)
     ok = status < 400 and body_ok
@@ -986,6 +1036,24 @@ def parse_recharge_plans(data: Any, *, limit: int = 80) -> list[dict[str, Any]]:
     return out
 
 
+def parse_operator_lookup(data: Any) -> dict[str, str]:
+    """Pull operator and circle ids out of Mobikwik getconnectiondetails."""
+    if not isinstance(data, dict):
+        return {"operator_id": "", "circle": ""}
+    root = data.get("data") if isinstance(data.get("data"), dict) else data
+    if isinstance(root, dict) and isinstance(root.get("data"), dict):
+        root = root["data"]
+    if not isinstance(root, dict):
+        return {"operator_id": "", "circle": ""}
+    operator_id = _op_value(
+        _first_non_empty(root.get("operatorId"), root.get("op"), root.get("operator"))
+    )
+    circle = _op_value(_first_non_empty(root.get("circleId"), root.get("cir"), root.get("circle")))
+    if circle in _CIRCLE_NONE:
+        circle = ""
+    return {"operator_id": operator_id, "circle": circle}
+
+
 def list_recharge_plans(
     *,
     operator_id: str | int,
@@ -1111,35 +1179,6 @@ def fetch_bill(
     if mode:
         payload["paymentMode"] = mode
     cfg = _config() or {}
-    # #region agent log
-    try:
-        with open("/Users/sandeepsuda/Desktop/Parkpe Hub/.cursor/debug-12f7c3.log", "a", encoding="utf-8") as _dbg:
-            _dbg.write(
-                json.dumps(
-                    {
-                        "sessionId": "12f7c3",
-                        "runId": "post-fix",
-                        "hypothesisId": "M",
-                        "location": "bbps.py:fetch_bill:payload",
-                        "message": "view_bill payload before Mobikwik",
-                        "data": {
-                            "op": numeric_op,
-                            "category": (row or {}).get("category"),
-                            "cn_len": len(str(customer_id or "").strip()),
-                            "has_cir": bool(cir_val),
-                            "ad_keys": sorted(mapped_ad.keys()),
-                            "ad_lens": {k: len(str(v)) for k, v in mapped_ad.items()},
-                            "payment_mode": mode,
-                            "agent_id_suffix": str(cfg.get("agent_id") or "")[-8:],
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-    except OSError:
-        pass
-    # #endregion
     res = _request(
         "integration.bbps.view_bill",
         "view_bill",
@@ -1153,31 +1192,6 @@ def fetch_bill(
             category=str((row or {}).get("category") or ""),
             agent_id=str(cfg.get("agent_id") or ""),
         )
-        # #region agent log
-        try:
-            with open("/Users/sandeepsuda/Desktop/Parkpe Hub/.cursor/debug-12f7c3.log", "a", encoding="utf-8") as _dbg:
-                _dbg.write(
-                    json.dumps(
-                        {
-                            "sessionId": "12f7c3",
-                            "runId": "post-fix",
-                            "hypothesisId": "M",
-                            "location": "bbps.py:fetch_bill:error",
-                            "message": "view_bill vendor error mapped",
-                            "data": {
-                                "op": numeric_op,
-                                "category": (row or {}).get("category"),
-                                "raw_error": str(res.get("error") or "")[:120],
-                                "mapped_error": err[:180],
-                            },
-                            "timestamp": int(time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except OSError:
-            pass
-        # #endregion
         return {"ok": False, "status": res["status"], "error": err, "bill": None}
 
     data = res["data"]
@@ -1462,20 +1476,236 @@ def _op_str(raw: str) -> str:
     return raw
 
 
-def _icon_url(op: str) -> str:
-    clean = _op_str(op)
+# FASTag rows share Mobikwik op 294. Prefer another category's Mobikwik brand icon
+# (PaySwap CSP only allows static.mobikwik.com by default). Cir_Id → donor op id.
+_FASTAG_BRAND_ICON_OP: dict[str, str] = {
+    "11": "294",  # IHMC / highways
+    "12": "328",  # IndusInd (insurance)
+    "13": "1123",  # Bank of Baroda (Baroda Broadband mark)
+    "14": "37",  # ICICI
+    "15": "285",  # HDFC
+    "16": "261",  # IDFC FIRST
+    "17": "239",  # Axis
+    "18": "492",  # Kotak
+    "19": "575",  # Equitas
+    "21": "294",  # Paul Merchants
+    "22": "294",  # J&K Bank
+    "23": "1609",  # Federal Bank
+    "24": "294",  # IDBI
+    "25": "1494",  # UCO
+    "26": "294",  # Transaction Analyst
+    "27": "294",  # IOB
+    "28": "294",  # Transcorp
+    "29": "1815",  # Karnataka Bank
+    "30": "1",  # Airtel
+    "31": "134",  # SBI
+    "32": "294",  # South Indian Bank
+    "33": "827",  # Saraswat
+    "34": "294",  # Bank of Maharashtra
+    "35": "1298",  # Indian Bank
+    "36": "294",  # LivQuik
+    "37": "819",  # Union Bank
+    "38": "186",  # Canara
+    "39": "385",  # AU Bank
+    "40": "272",  # Bandhan
+    "41": "159",  # Bajaj
+    "42": "890",  # Yes Bank
+    "43": "294",  # KVB
+    "44": "740",  # PNB
+    "45": "294",  # CUB
+    "46": "1418",  # BlackBuck
+}
+# Credit-card Cir_Id rows share Mobikwik op 208 — reuse bank marks from FASTag/insurance/loans.
+_CREDIT_CARD_BRAND_ICON_OP: dict[str, str] = {
+    "1": "37",  # ICICI
+    "3": "134",  # SBI
+    "4": "740",  # PNB
+    "7": "",  # IOB → domain
+    "8": "328",  # IndusInd
+    "9": "1298",  # Indian Bank
+    "10": "",  # IDBI → domain
+    "12": "1609",  # Federal
+    "13": "",  # South Indian Bank → domain
+    "15": "819",  # Union Bank
+    "19": "186",  # Canara
+    "21": "1123",  # BoB
+    "22": "",  # Bank of India → domain
+    "23": "239",  # Axis
+    "26": "1841",  # RBL loan mark
+    "29": "492",  # Kotak
+    "30": "261",  # IDFC FIRST
+    "31": "385",  # AU
+    "32": "",  # HSBC → domain
+    "33": "",  # SBM → domain
+    "34": "",  # DBS → domain
+    "35": "",  # J&K → domain
+    "36": "827",  # Saraswat
+    "37": "1298",  # One - Indian Bank
+    "38": "",  # Dhanlaxmi → domain
+    "39": "1123",  # One - BOBCARD
+    "40": "",  # ESAF → domain
+    "42": "",  # Suryoday → domain
+    "43": "",  # CUB → domain
+    "44": "",  # DCB → domain
+    "45": "",  # CSB → domain
+    "46": "272",  # Bandhan
+    "47": "",  # TMB → domain
+}
+# When no Mobikwik donor exists, fall back to a public favicon (CSP allows gstatic).
+_FASTAG_BRAND_DOMAINS: dict[str, str] = {
+    "11": "nhai.gov.in",
+    "21": "paulmerchants.net",
+    "22": "jkbank.com",
+    "24": "idbibank.in",
+    "26": "transactionanalysts.com",
+    "27": "iob.in",
+    "28": "transcorpint.com",
+    "32": "southindianbank.com",
+    "34": "bankofmaharashtra.in",
+    "36": "livquik.com",
+    "43": "karurvysyabank.com",
+    "45": "cityunionbank.com",
+}
+_CREDIT_CARD_BRAND_DOMAINS: dict[str, str] = {
+    "7": "iob.in",
+    "10": "idbibank.in",
+    "13": "southindianbank.com",
+    "22": "bankofindia.co.in",
+    "32": "hsbc.co.in",
+    "33": "sbm.bank.in",
+    "34": "dbs.com",
+    "35": "jkbank.com",
+    "38": "dhanbank.com",
+    "40": "esafbank.com",
+    "42": "suryodaybank.com",
+    "43": "cityunionbank.com",
+    "44": "dcbbank.com",
+    "45": "csb.co.in",
+    "47": "tmb.in",
+}
+
+
+def _mobikwik_op_icon(op_id: str) -> str:
+    clean = _op_str(op_id)
     if clean.isdigit():
         return f"{_ICON_BASE}/op{clean}.png"
     return ""
 
 
+def _gstatic_favicon(domain: str) -> str:
+    clean = str(domain or "").strip().lower()
+    if not clean or "/" in clean or " " in clean:
+        return ""
+    # https:// without www — some bank hosts only resolve this way on gstatic.
+    return (
+        "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON"
+        f"&fallback_opts=TYPE,SIZE,URL&url=https://{clean}&size=128"
+    )
+
+
+def _icon_url(op: str, *, category: str = "", circle_default: str = "") -> str:
+    cat = str(category or "").strip().upper()
+    cir = str(circle_default or "").strip()
+    if cat == "FASTAG":
+        donor = _FASTAG_BRAND_ICON_OP.get(cir, "")
+        domain = _FASTAG_BRAND_DOMAINS.get(cir, "")
+        # Prefer a real brand mark from another Mobikwik category (same CSP host).
+        if donor and donor not in {"", "294", "208"}:
+            return _mobikwik_op_icon(donor)
+        if domain:
+            return _gstatic_favicon(domain)
+        if donor:
+            return _mobikwik_op_icon(donor)
+    if cat == "CREDIT_CARD":
+        donor = _CREDIT_CARD_BRAND_ICON_OP.get(cir, "")
+        domain = _CREDIT_CARD_BRAND_DOMAINS.get(cir, "")
+        if donor and donor not in {"", "294", "208"}:
+            return _mobikwik_op_icon(donor)
+        if domain:
+            return _gstatic_favicon(domain)
+        if donor:
+            return _mobikwik_op_icon(donor)
+    return _mobikwik_op_icon(op)
+
+
+_DATE_FORMAT_HINT = re.compile(
+    r"^(dd[/\-.]?mm[/\-.]?yyyy|yyyy[/\-.]?mm[/\-.]?dd|dd-mmm-yyyy|dd/mm/yyyy|yyyy-mm-dd|ddmmyyyy|yyyymmdd)$",
+    re.I,
+)
+_ENUM_SPLIT = re.compile(r"\s*,\s*")
+_LABEL_CODE = re.compile(r"^(.+?)\s*[:=]\s*([A-Za-z0-9._-]{1,32})\s*$")
+
+
+def _normalize_sheet_code(raw: str) -> str:
+    """Excel often stores Cir_Id / bank codes as 11.0 — strip trailing .0."""
+    text = _op_str(str(raw or "").strip())
+    if re.fullmatch(r"\d+\.0+", text):
+        return text.split(".", 1)[0]
+    return text
+
+
+def _parse_enum_options(raw: str) -> list[dict[str, str]]:
+    """Turn 'Agra : 201, Surat : 204' or 'Monthly,Bimonthly' into select options."""
+    text = str(raw or "").strip()
+    if not text or any(ch in text for ch in "^$[]()*+?{}|\\"):
+        return []
+    parts = [p for p in _ENUM_SPLIT.split(text) if p.strip()]
+    if len(parts) < 2:
+        return []
+    options: list[dict[str, str]] = []
+    labeled = 0
+    for part in parts:
+        match = _LABEL_CODE.match(part.strip())
+        if match:
+            labeled += 1
+            options.append({"label": match.group(1).strip(), "value": _normalize_sheet_code(match.group(2))})
+        else:
+            token = part.strip()
+            if not token:
+                continue
+            options.append({"label": token, "value": _normalize_sheet_code(token)})
+    if len(options) < 2:
+        return []
+    # Require at least one Label:code pair when commas look like a prose sentence.
+    if labeled == 0 and any(len(o["value"]) > 40 for o in options):
+        return []
+    return options
+
+
 def _constant_default(regex_or_code: str) -> str:
-    raw = _op_str(str(regex_or_code or "").strip())
+    """Fixed Mobikwik tag (bank code / Cir_Id) — not a regex and not an enum list."""
+    raw = _normalize_sheet_code(str(regex_or_code or "").strip())
     if not raw:
         return ""
     if any(ch in raw for ch in "^$[]()*+?{}|\\"):
         return ""
+    if _DATE_FORMAT_HINT.match(raw.replace(" ", "")):
+        return ""
+    if _parse_enum_options(raw):
+        return ""
+    if "," in raw or ":" in raw:
+        return ""
+    if len(raw) > 32:
+        return ""
     return raw
+
+
+def _enrich_ad_param(*, key: str, fetch_key: str, pay_key: str, label: str, regex_val: str, optional: bool) -> dict[str, Any]:
+    """Mark constants as ui_hidden and enum lists as select options for the counter form."""
+    options = _parse_enum_options(regex_val)
+    default_val = "" if options else _constant_default(regex_val)
+    ui_hidden = bool(default_val) and not optional and not options
+    return {
+        "key": key,
+        "fetch_key": fetch_key,
+        "pay_key": pay_key,
+        "label": label,
+        "regex": "" if (options or ui_hidden) else regex_val,
+        "default_value": default_val,
+        "optional": optional,
+        "ui_hidden": ui_hidden,
+        "options": options,
+    }
 
 
 def _parse_params(row: tuple[Any, ...], idx: dict[str, int]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -1496,26 +1726,42 @@ def _parse_params(row: tuple[Any, ...], idx: dict[str, int]) -> tuple[dict[str, 
         if not label and not key:
             continue
         regex_val = _cell_str(row, idx, f"Param_{n}_Regex")
-        default_val = _constant_default(regex_val)
         extra.append(
-            {
-                "key": key or f"ad{n}",
-                "fetch_key": param_id or key or f"ad{n}",
-                "pay_key": pay_id or param_id or f"ad{n}",
-                "label": label or param_id or key,
-                "regex": regex_val,
-                "default_value": default_val,
-                "optional": _cell_str(row, idx, f"Param_{n}_Optional").lower() == "true",
-            }
+            _enrich_ad_param(
+                key=key or f"ad{n}",
+                fetch_key=param_id or key or f"ad{n}",
+                pay_key=pay_id or param_id or f"ad{n}",
+                label=label or param_id or key,
+                regex_val=regex_val,
+                optional=_cell_str(row, idx, f"Param_{n}_Optional").lower() == "true",
+            )
         )
     return primary, extra
+
+
+def _circle_from_sheet(cir_raw: str) -> tuple[bool, str]:
+    """Return (cir_required_for_ui, circle_default).
+
+    Mobikwik Cir_Id on FASTag / credit-card / some education rows is a fixed bank
+    or board code — auto-send it, never ask the retailer for a telecom circle.
+    Prepaid still uses the separate TELECOM_CIRCLES picker (isPrepaidLike).
+    """
+    raw = _normalize_sheet_code(cir_raw)
+    if not raw or raw.lower() in _CIRCLE_NONE:
+        return False, ""
+    # Fixed numeric / short alphanumeric codes are defaults, not user prompts.
+    if re.fullmatch(r"[A-Za-z0-9_-]{1,12}", raw):
+        return False, raw
+    return True, ""
 
 
 # Mobikwik LPG cylinder booking ops used by ParkPe (apps/parkpe/js/screens.js).
 # Operators.xlsx only lists piped Gas; cylinder Indane / Bharat Gas / HP Gas are absent.
 # Live probe: empty adParams → "Tag Value Should be Numeric as per MDM";
 # ad1 alone long → "Product Qty"; ad1+ad2 required as numeric tags for Bharat Gas.
-_LPG_SUPPLEMENT_VERSION = "lpg-cylinder-v2"
+_LPG_SUPPLEMENT_VERSION = "lpg-cylinder-v3"
+# PARAM_UI_VERSION bumps catalogue cache when ad_param / circle UI rules change.
+_PARAM_UI_VERSION = "param-ui-v4-brand-icons"
 _LPG_QTY_PARAM = {
     "key": "ad1",
     "fetch_key": "ad1",
@@ -1524,6 +1770,8 @@ _LPG_QTY_PARAM = {
     "regex": "^[0-9]{1,3}$",
     "default_value": "1",
     "optional": False,
+    "ui_hidden": False,
+    "options": [],
 }
 _LPG_DISTRIBUTOR_PARAM = {
     "key": "ad2",
@@ -1533,6 +1781,8 @@ _LPG_DISTRIBUTOR_PARAM = {
     "regex": "^[0-9]{4,12}$",
     "default_value": "",
     "optional": False,
+    "ui_hidden": False,
+    "options": [],
 }
 _LPG_SUPPLEMENT: tuple[dict[str, Any], ...] = (
     {
@@ -1600,7 +1850,7 @@ def _load_catalogue() -> list[dict[str, Any]]:
     if path is None:
         return list(_lpg_supplement_rows())
     mtime = path.stat().st_mtime
-    cache_key = (mtime, _LPG_SUPPLEMENT_VERSION)
+    cache_key = (mtime, _LPG_SUPPLEMENT_VERSION, _PARAM_UI_VERSION)
     with _CAT_LOCK:
         if _CAT_CACHE is not None and _CAT_CACHE[0] == cache_key:
             return _CAT_CACHE[1]
@@ -1645,9 +1895,7 @@ def _load_catalogue() -> list[dict[str, Any]]:
                 else:
                     bill_fetch = "NOT_REQUIRED"
 
-                cir_raw = _op_str(_cell_str(row, idx, "Cir_Id"))
-                cir_required = bool(cir_raw) and cir_raw.lower() not in _CIRCLE_NONE
-                circle_default = cir_raw if (cir_required and cir_raw.isdigit()) else ""
+                cir_required, circle_default = _circle_from_sheet(_cell_str(row, idx, "Cir_Id"))
                 modes_raw = _cell_str(row, idx, "Payment Modes")
                 modes = [m.strip() for m in modes_raw.split(",") if m.strip()] or ["Cash"]
                 is_fastag = "FASTAG" in category or "FASTAG" in name.upper()
@@ -1672,7 +1920,7 @@ def _load_catalogue() -> list[dict[str, Any]]:
                         "is_fastag": is_fastag,
                         "modes": modes,
                         "default_payment_mode": default_mode,
-                        "icon": _icon_url(op),
+                        "icon": _icon_url(op, category=category, circle_default=circle_default),
                         "primary_param": primary,
                         "ad_params": extra,
                         "search_aliases": [],
@@ -1685,31 +1933,6 @@ def _load_catalogue() -> list[dict[str, Any]]:
                 continue
             seen.add(key)
             items.append(extra_row)
-        # #region agent log
-        try:
-            with open("/Users/sandeepsuda/Desktop/Parkpe Hub/.cursor/debug-12f7c3.log", "a", encoding="utf-8") as _dbg:
-                _dbg.write(
-                    json.dumps(
-                        {
-                            "sessionId": "12f7c3",
-                            "runId": "post-fix",
-                            "hypothesisId": "F",
-                            "location": "bbps.py:_load_catalogue",
-                            "message": "catalogue loaded with LPG supplement",
-                            "data": {
-                                "total": len(items),
-                                "lpg_count": sum(1 for r in items if r["category"] == "LPG_BOOKING"),
-                                "gas_count": sum(1 for r in items if r["category"] == "GAS"),
-                                "lpg_names": [r["name"] for r in items if r["category"] == "LPG_BOOKING"],
-                            },
-                            "timestamp": int(time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except OSError:
-            pass
-        # #endregion
         _CAT_CACHE = (cache_key, items)
         return items
 

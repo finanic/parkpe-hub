@@ -33,6 +33,10 @@ export const ErrorCode = Object.freeze({
   VALIDATION: "validation",
   IDEMPOTENCY_CONFLICT: "idempotency_conflict",
   SERVER_ERROR: "server_error",
+  BULK_FETCH_FAILED: "bulk_fetch_failed",
+  BULK_PAY_FAILED: "bulk_pay_failed",
+  BULK_INSUFFICIENT_FLOAT: "bulk_insufficient_float",
+  BULK_PIPE_UNAVAILABLE: "bulk_pipe_unavailable",
 });
 
 export const RetailerService = Object.freeze({
@@ -78,6 +82,8 @@ export const HubPath = Object.freeze({
   PAYSWAP_BBPS_FETCH_BILL: "/api/v1/payswap/bbps/fetch-bill",
   PAYSWAP_BBPS_PAY: "/api/v1/payswap/bbps/pay",
   PAYSWAP_BBPS_STATUS: "/api/v1/payswap/bbps/status",
+  PAYSWAP_BBPS_BULK_TEMPLATE: "/api/v1/payswap/bbps/bulk/template",
+  PAYSWAP_BBPS_BULK_BATCHES: "/api/v1/payswap/bbps/bulk/batches",
   PAYSWAP_COMMISSION_SUMMARY: "/api/v1/payswap/commission/summary",
   PAYSWAP_TDS_CERTIFICATE: "/api/v1/payswap/tds/certificate",
   DESK_ECONOMICS_POLICY: "/api/v1/desk/commission/policy",

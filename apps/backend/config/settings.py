@@ -6,8 +6,9 @@ This process reads them. It does not write auth.sqlite.
 
 DJANGO_SECRET_KEY, when set, comes from the environment. An empty value
 becomes a per-process key so nothing secret is stored in the repo.
-Kaleyra SMS settings are read by integrations/kaleyra.py from the
-environment. They are not Django settings.
+Provider credentials (Kaleyra, mail, Mobikwik, Cashfree, PayU) come from
+apps/backend/.env via config.envfile.load_backend_env. They are not Django
+settings fields.
 """
 
 from __future__ import annotations
@@ -16,11 +17,21 @@ import os
 import secrets
 from pathlib import Path
 
+from config.envfile import ensure_backend_env
+from core.privatefiles import restrict_private
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+ensure_backend_env()
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or secrets.token_urlsafe(32)
 DEBUG = os.environ.get("DJANGO_DEBUG") == "1"
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+# Comma-separated. Default stays loopback-only so a bare deploy is not open.
+_ALLOWED = [
+    host.strip()
+    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+    if host.strip()
+]
+ALLOWED_HOSTS = _ALLOWED or ["127.0.0.1", "localhost"]
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
@@ -49,9 +60,14 @@ DATABASES = {
     }
 }
 
-# Same ceiling as BODY_MAX in apps/backend/auth/security.py.
-DATA_UPLOAD_MAX_MEMORY_SIZE = 4096
-DATA_UPLOAD_MAX_NUMBER_FIELDS = 20
+restrict_private(DATA_DIR)
+restrict_private(Path(DATABASES["default"]["NAME"]))
+
+# Auth on port 4600 keeps BODY_MAX at 4096. This process also reads a PayU
+# callback form and desk JSON, so the ceiling is larger and still bounded.
+# DRF 3.18 enforces both limits while parsing request.data.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 64 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 80
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

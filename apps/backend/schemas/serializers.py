@@ -75,6 +75,12 @@ class BbpsFetchBillSerializer(serializers.Serializer):
     )
 
 
+class BulkBbpsProceedSerializer(serializers.Serializer):
+    wallet_pin = serializers.CharField(required=True, allow_blank=False, max_length=12)
+    row_ids = serializers.ListField(child=serializers.CharField(max_length=64), required=False, allow_empty=True)
+    exclude_row_ids = serializers.ListField(child=serializers.CharField(max_length=64), required=False, allow_empty=True)
+
+
 class BbpsPaymentSerializer(serializers.Serializer):
     """POST /api/v1/payswap/bbps/pay.
 
