@@ -32,10 +32,21 @@ SERVICES = (
 
 
 def main() -> int:
+    """Launches configured services and shuts them down when interrupted or when one exits.
+    Parameters:
+        - None: This function takes no parameters.
+    Returns:
+        - int: The exit code of the service that stopped, or 0 if none returned a nonzero code."""
     children: list[tuple[str, subprocess.Popen[bytes]]] = []
     stopping = False
 
     def stop(_signum: int | None = None, _frame: object = None) -> None:
+        """Marks shutdown as in progress and terminates all running child processes.
+        Parameters:
+            - _signum (int | None): Optional signal number; unused.
+            - _frame (object): Optional signal frame; unused.
+        Returns:
+            - None: This function does not return a value."""
         nonlocal stopping
         if stopping:
             return
