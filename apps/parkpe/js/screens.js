@@ -307,6 +307,38 @@ function hero(kicker, title, lead) {
   return `<header class="screen-hero"><a class="round-back" href="#dashboard" aria-label="Back to dashboard"><span class="mi">arrow_back</span></a><div><p class="screen-kicker">${esc(kicker)}</p><h1>${esc(title)}</h1><p>${esc(lead)}</p></div></header>`;
 }
 
+/* Unknown route names never go through innerHTML — only allowlisted screens do. */
+function heroNode(kicker, title, lead) {
+  const header = document.createElement("header");
+  header.className = "screen-hero";
+  const back = document.createElement("a");
+  back.className = "round-back";
+  back.href = "#dashboard";
+  back.setAttribute("aria-label", "Back to dashboard");
+  const backIcon = document.createElement("span");
+  backIcon.className = "mi";
+  backIcon.textContent = "arrow_back";
+  back.appendChild(backIcon);
+  const copy = document.createElement("div");
+  const k = document.createElement("p");
+  k.className = "screen-kicker";
+  k.textContent = String(kicker || "");
+  const h = document.createElement("h1");
+  h.textContent = String(title || "");
+  const p = document.createElement("p");
+  p.textContent = String(lead || "");
+  copy.append(k, h, p);
+  header.append(back, copy);
+  return header;
+}
+
+function mountScreenHtml(root, html) {
+  root.replaceChildren();
+  const tpl = document.createElement("template");
+  tpl.innerHTML = String(html || "");
+  root.append(tpl.content);
+}
+
 function opRow(name, options) {
   const on = options && options.on;
   const logo = options && options.logo;
@@ -1739,8 +1771,11 @@ async function hydrateProfileSessions(root) {
 window.ParkpeScreens = {
   mount(root, name) {
     const key = String(name || "");
-    const draw = Object.prototype.hasOwnProperty.call(screens, key) ? screens[key] : null;
-    root.innerHTML = draw ? draw() : hero("ParkPe", key || "Screen", "");
+    if (Object.prototype.hasOwnProperty.call(screens, key)) {
+      mountScreenHtml(root, screens[key]());
+    } else {
+      root.replaceChildren(heroNode("ParkPe", key || "Screen", ""));
+    }
     if (!wired) {
       root.addEventListener("click", async (event) => {
         const delBtn = event.target.closest("[data-delete-vehicle]");

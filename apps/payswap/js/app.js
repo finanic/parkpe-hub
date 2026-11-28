@@ -14,6 +14,74 @@
   const esc = window.Payswap.esc;
   const rupee = window.Payswap.rupee;
 
+  function httpUrl(value) {
+    const s = String(value || "").trim();
+    return /^https?:\/\//i.test(s) ? s : "";
+  }
+
+  function slipRowEl(label, value) {
+    const row = document.createElement("div");
+    row.className = "slip-row";
+    const span = document.createElement("span");
+    span.textContent = label;
+    const strong = document.createElement("strong");
+    strong.textContent = String(value == null ? "" : value);
+    row.append(span, strong);
+    return row;
+  }
+
+  /* PG top-up panel: DOM only so API fields never hit innerHTML. */
+  function renderPgWalletBox(box, { orderId, amount, checkoutUrl, linkLabel, verifyId }) {
+    if (!box) return;
+    box.replaceChildren();
+    const kicker = document.createElement("p");
+    kicker.className = "kicker";
+    kicker.textContent = "PG Wallet Top-up";
+    box.append(kicker, slipRowEl("Order ID", orderId), slipRowEl("Amount", amount));
+    const url = httpUrl(checkoutUrl);
+    if (url) {
+      const a = document.createElement("a");
+      a.className = "btn yellow";
+      a.href = url;
+      a.rel = "noopener";
+      a.textContent = linkLabel || "Pay Now";
+      box.append(a);
+    }
+    const btn = document.createElement("button");
+    btn.className = "btn";
+    btn.type = "button";
+    btn.dataset.pgVerify = String(verifyId || orderId || "");
+    btn.textContent = "Verify payment";
+    box.append(btn);
+  }
+
+  function renderPgCheckoutReceipt(box, cardHtml, { checkoutUrl, verifyId }) {
+    if (!box) return;
+    box.replaceChildren();
+    const tpl = document.createElement("template");
+    tpl.innerHTML = String(cardHtml || "");
+    box.append(tpl.content);
+    const actions = document.createElement("div");
+    actions.className = "slip-actions";
+    const url = httpUrl(checkoutUrl);
+    if (url) {
+      const a = document.createElement("a");
+      a.className = "btn yellow block";
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = "Open PG Checkout";
+      actions.append(a);
+    }
+    const btn = document.createElement("button");
+    btn.className = "btn block";
+    btn.type = "button";
+    btn.dataset.pgVerify = String(verifyId || "");
+    btn.textContent = "Verify & Execute BBPS";
+    actions.append(btn);
+    box.append(actions);
+  }
+
   /* PayU Hosted Checkout: real browser form POST (not fetch) to PayU _payment. */
   function submitPayuHostedCheckout(payload) {
     const action = payload && payload.action;
@@ -3366,11 +3434,10 @@
             pgBox.hidden = false;
             pgBox.className = "receipt bbps-receipt is-pending";
             pgBox.dataset.receiptKind = "payment";
-            pgBox.innerHTML = `${receiptCardHtml(pgData, { download: false })}
-              <div class="slip-actions">
-                ${result.data.checkout_url ? `<a class="btn yellow block" href="${esc(result.data.checkout_url)}" target="_blank" rel="noopener">Open PG Checkout</a>` : ""}
-                <button class="btn block" type="button" data-pg-verify="${esc(result.data.pg_order_id)}">Verify &amp; Execute BBPS</button>
-              </div>`;
+            renderPgCheckoutReceipt(pgBox, receiptCardHtml(pgData, { download: false }), {
+              checkoutUrl: result.data.checkout_url,
+              verifyId: result.data.pg_order_id,
+            });
             bbpsState.lastReceiptData = pgData;
           }
           renderBbpsSteps(4);
@@ -3514,11 +3581,13 @@
             statusEl.textContent = "Could not open Cashfree. Use Pay now below.";
             if (pgBox) {
               pgBox.hidden = false;
-              pgBox.innerHTML = `<p class="kicker">PG Wallet Top-up</p>
-                <div class="slip-row"><span>Order ID</span><strong>${esc(res.data.pg_order_id)}</strong></div>
-                <div class="slip-row"><span>Amount</span><strong>${esc(rupee(res.data.amount))}</strong></div>
-                ${res.data.checkout_url ? `<a class="btn yellow" href="${esc(res.data.checkout_url)}" rel="noopener">Open Cashfree</a>` : ""}
-                <button class="btn" type="button" data-pg-verify="${esc(res.data.pg_order_id)}">Verify payment</button>`;
+              renderPgWalletBox(pgBox, {
+                orderId: res.data.pg_order_id,
+                amount: rupee(res.data.amount),
+                checkoutUrl: res.data.checkout_url,
+                linkLabel: "Open Cashfree",
+                verifyId: res.data.pg_order_id,
+              });
             }
           }
           return;
@@ -3526,11 +3595,13 @@
         statusEl.textContent = `PG order ${res.data.pg_order_id} created.`;
         if (pgBox) {
           pgBox.hidden = false;
-          pgBox.innerHTML = `<p class="kicker">PG Wallet Top-up</p>
-            <div class="slip-row"><span>Order ID</span><strong>${esc(res.data.pg_order_id)}</strong></div>
-            <div class="slip-row"><span>Amount</span><strong>${esc(rupee(res.data.amount))}</strong></div>
-            ${res.data.checkout_url ? `<a class="btn yellow" href="${esc(res.data.checkout_url)}" rel="noopener">Pay Now</a>` : ""}
-            <button class="btn" type="button" data-pg-verify="${esc(res.data.pg_order_id)}">Verify payment</button>`;
+          renderPgWalletBox(pgBox, {
+            orderId: res.data.pg_order_id,
+            amount: rupee(res.data.amount),
+            checkoutUrl: res.data.checkout_url,
+            linkLabel: "Pay Now",
+            verifyId: res.data.pg_order_id,
+          });
         }
       } else {
         statusEl.textContent = res.error || "Could not start PG order.";
