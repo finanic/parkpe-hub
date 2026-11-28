@@ -32,6 +32,7 @@ SERVICES = (
 
 
 def main() -> int:
+    """Launch the four local services and wait until one exits or Ctrl+C."""
     children: list[tuple[str, subprocess.Popen[bytes]]] = []
     stopping = False
 

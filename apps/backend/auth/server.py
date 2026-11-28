@@ -1163,6 +1163,9 @@ class AuthApp:
         self._json(request, 200, {"services": services}, origin)
 
     def _health_ok(self, url: str) -> bool:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return False
         request = urllib.request.Request(url, method="GET")
         try:
             with urllib.request.urlopen(request, timeout=0.4) as response:
@@ -1191,6 +1194,10 @@ class AuthApp:
                 clean_params[k] = vals[0][:80]
         upstream_path = f"{upstream}?{urlencode(clean_params)}" if clean_params else upstream
         base = os.environ.get("HUB_API_ORIGIN", "http://127.0.0.1:4610").rstrip("/")
+        parsed = urlparse(base)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            self._json(request, 503, {"error": "The hub API is not running."}, origin)
+            return
         data = None if body is None else json.dumps(body).encode()
         headers = {
             "Accept": "application/json",
@@ -1291,6 +1298,9 @@ class AuthApp:
     def _hub_entries(self, request, upstream: str) -> list:
         """Read a Django desk list. A down hub leaves the local provider lines in place."""
         base = os.environ.get("HUB_API_ORIGIN", "http://127.0.0.1:4610").rstrip("/")
+        parsed = urlparse(base)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return []
         outgoing = urllib.request.Request(
             base + upstream,
             headers={"Accept": "application/json", "Cookie": self._access_cookie_header(request)},

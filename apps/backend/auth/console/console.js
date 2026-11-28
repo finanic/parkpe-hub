@@ -37,14 +37,24 @@
     try {
       let id = localStorage.getItem(key);
       if (id && id.length >= 16) return id;
-      id =
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `hub-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+      if (typeof crypto !== "undefined" && crypto.randomUUID) {
+        id = crypto.randomUUID();
+      } else if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        id = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      } else {
+        throw new Error("secure random unavailable");
+      }
       localStorage.setItem(key, id);
       return id;
     } catch (_err) {
-      return `hub-ephemeral-${Date.now().toString(36)}`;
+      if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        return `hub-ephemeral-${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+      }
+      return "hub-ephemeral-unavailable";
     }
   }
 

@@ -28,7 +28,32 @@ if (!in_array($role, ['customer', 'retailer'], true)) {
 
 $configPath = getenv('AUTH_MAIL_CONFIG') ?: '';
 $smtpPath = getenv('AUTH_SES_SMTP_PHP') ?: '';
-if ($configPath === '' || $smtpPath === '' || !is_file($configPath) || !is_file($smtpPath)) {
+$backendRoot = realpath(dirname(__DIR__));
+$allowedRoots = array_values(array_filter([
+    $backendRoot !== false ? $backendRoot : null,
+    $backendRoot !== false ? realpath($backendRoot . '/Mail Setup') : null,
+]));
+$resolveLocal = static function (string $path) use ($allowedRoots, $backendRoot): string {
+    $candidates = [$path];
+    if ($backendRoot !== false && $path !== '' && $path[0] !== '/' && $path[0] !== '\\') {
+        $candidates[] = $backendRoot . DIRECTORY_SEPARATOR . $path;
+    }
+    foreach ($candidates as $candidate) {
+        $real = realpath($candidate);
+        if ($real === false || !is_file($real)) {
+            continue;
+        }
+        foreach ($allowedRoots as $root) {
+            if ($root !== false && str_starts_with($real, rtrim((string) $root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)) {
+                return $real;
+            }
+        }
+    }
+    return '';
+};
+$configPath = $resolveLocal($configPath);
+$smtpPath = $resolveLocal($smtpPath);
+if ($configPath === '' || $smtpPath === '') {
     exit(2);
 }
 
@@ -47,10 +72,17 @@ $from = (string) ($config['from_email'] ?? 'noreply@parkpe.in');
 $isPayswap = $role === 'retailer';
 $brand = $isPayswap ? 'PaySwap' : 'ParkPe';
 $name = $brand;
-$logoPath = dirname(__DIR__, 2) . ($isPayswap
+$repoRoot = realpath(dirname(__DIR__, 2));
+$logoCandidate = ($repoRoot !== false ? $repoRoot : dirname(__DIR__, 2)) . ($isPayswap
     ? '/payswap/assets/payswap-logo.png'
     : '/parkpe/assets/img/logo/parkpe_logo.png');
-$logo = is_file($logoPath) ? 'data:image/png;base64,' . base64_encode((string) file_get_contents($logoPath)) : '';
+$logoReal = realpath($logoCandidate);
+$logo = (
+    $repoRoot !== false
+    && $logoReal !== false
+    && str_starts_with($logoReal, $repoRoot . DIRECTORY_SEPARATOR)
+    && is_file($logoReal)
+) ? 'data:image/png;base64,' . base64_encode((string) file_get_contents($logoReal)) : '';
 $safeSubject = htmlspecialchars($subject, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $safeBrand = htmlspecialchars($brand, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $otp = '';

@@ -24,5 +24,6 @@ class RequestContextMiddleware:
             response = self.get_response(request)
         finally:
             reset_action()
-        response["X-Request-Id"] = request_id
+        # request_id_from already rejects CR/LF; strip again before the header write.
+        response["X-Request-Id"] = str(request_id).replace("\r", "").replace("\n", "")[:80]
         return response

@@ -309,6 +309,9 @@ def _ssl_context() -> ssl.SSLContext | None:
 
 
 def _http_post(url: str, body: dict[str, Any], headers: dict[str, str], timeout: float) -> tuple[int, bytes]:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise OSError("BBPS URL must be https")
     req = urllib.request.Request(
         url,
         data=json.dumps(body, separators=(",", ":")).encode("utf-8"),
@@ -328,6 +331,9 @@ def _http_post(url: str, body: dict[str, Any], headers: dict[str, str], timeout:
 
 
 def _http_get(url: str, headers: dict[str, str], timeout: float) -> tuple[int, bytes]:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise OSError("BBPS URL must be https")
     req = urllib.request.Request(url, headers=headers, method="GET")
     context = _ssl_context()
     # Plan catalogues can be large; keep a hard cap so a bad payload cannot fill memory.

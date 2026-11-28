@@ -183,10 +183,17 @@ def initiate_payu_checkout(order_id: str, *, user_id: str = "") -> dict[str, Any
 
 def frontend_result_url(order: PgOrder | None, *, ok: bool) -> str:
     import os
+    import re
+    from urllib.parse import urlparse
 
     base = (os.environ.get("PAYSWAP_ORIGIN") or "http://127.0.0.1:4500").rstrip("/")
+    base = base.replace("\r", "").replace("\n", "")
+    parsed = urlparse(base)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        base = "http://127.0.0.1:4500"
     page = "bills" if order and order.purpose == "bbps_direct" else "wallet"
-    oid = order.pg_order_id if order else ""
+    raw_oid = str(order.pg_order_id if order else "")
+    oid = re.sub(r"[^A-Za-z0-9._-]", "", raw_oid)[:80]
     flag = "ok" if ok else "fail"
     if oid:
         return f"{base}/#{page}?payu={flag}&order_id={oid}"

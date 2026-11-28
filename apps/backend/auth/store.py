@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import threading
 import time
@@ -202,6 +203,13 @@ class Store:
         self._dummy = hash_password(uuid.uuid4().hex, n=scrypt_n)
 
     def _ensure_column(self, table: str, column: str, typedef: str) -> None:
+        # Identifiers come only from migration callers; still allowlist before PRAGMA/ALTER.
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table or ""):
+            raise ValueError("invalid table")
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", column or ""):
+            raise ValueError("invalid column")
+        if not re.fullmatch(r"[A-Za-z0-9_()'\" ]+", typedef or ""):
+            raise ValueError("invalid typedef")
         found = [row[1] for row in self._db.execute(f"PRAGMA table_info({table})")]
         if column not in found:
             self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {typedef}")
@@ -487,6 +495,8 @@ class Store:
         with self._lock:
             for kind, value in checks:
                 if not value:
+                    continue
+                if kind not in {"pan", "gstin", "udyam", "mobile"}:
                     continue
                 row = self._db.execute(
                     f"SELECT 1 FROM account_profiles WHERE role = 'retailer' AND {kind} = ? LIMIT 1",

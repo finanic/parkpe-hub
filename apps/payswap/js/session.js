@@ -21,14 +21,24 @@ function deviceId() {
   try {
     let id = localStorage.getItem(DEVICE_KEY);
     if (id && id.length >= 16) return id;
-    id =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `ps-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      id = crypto.randomUUID();
+    } else if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      id = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    } else {
+      throw new Error("secure random unavailable");
+    }
     localStorage.setItem(DEVICE_KEY, id);
     return id;
   } catch (_err) {
-    return `ps-ephemeral-${Date.now().toString(36)}`;
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      return `ps-ephemeral-${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+    }
+    return "ps-ephemeral-unavailable";
   }
 }
 

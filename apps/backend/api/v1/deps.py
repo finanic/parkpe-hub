@@ -43,6 +43,8 @@ class Actor:
     def __init__(self, email: str, role: str, app_context: str):
         self.email = email
         self.user_id = email
+        # DRF UserRateThrottle keys on user.pk; auth /me has no numeric id.
+        self.pk = email
         self.role = role
         self.app_context = app_context
         self.is_authenticated = True

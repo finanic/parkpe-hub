@@ -112,6 +112,8 @@ class _Admin:
     def __init__(self, email: str, role: str):
         self.email = email
         self.user_id = email
+        # DRF UserRateThrottle keys on user.pk.
+        self.pk = email
         self.role = role
         self.is_authenticated = True
 

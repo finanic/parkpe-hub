@@ -337,6 +337,9 @@ def verify_payment(txnid: str, *, retries: int = 2) -> dict[str, Any]:
         {"key": c["key"], "command": command, "var1": var1, "hash": digest}
     ).encode("utf-8")
     url = verify_action_url(c["env"])
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise PayUConfigError("payment provider misconfigured: verify url")
     last_err = "verify unavailable"
     attempt = 0
     while attempt <= max(0, retries):

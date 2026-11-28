@@ -75,10 +75,25 @@ USE_I18N = False
 USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "parkpe-hub-api",
+    }
+}
+
 REST_FRAMEWORK = {
     "UNAUTHENTICATED_USER": None,
     "DEFAULT_AUTHENTICATION_CLASSES": ["api.v1.deps.AppContextAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["api.v1.deps.AppScopePermission"],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "120/min",
+        "user": "600/min",
+    },
     "EXCEPTION_HANDLER": "config.exceptions.api_exception",
 }
 
