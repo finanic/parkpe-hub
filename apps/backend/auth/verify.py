@@ -42,6 +42,11 @@ _NAME_SKIP = {
 OTP_CODE_TTL = 10 * 60
 # Desk signup rows stay until the account opens or an operator cancels them.
 SIGNUP_INTENT_TTL = 24 * 60 * 60
+MSG_PROVIDER_REJECTED = "Verification provider rejected the check."
+MSG_PROVIDER_UNCONFIGURED = "Verification provider is not configured."
+ACTION_CF_PAN = "integration.cashfree.pan"
+ACTION_CF_GSTIN = "integration.cashfree.gstin"
+ACTION_CF_UDYAM = "integration.cashfree.udyam"
 
 
 def signup_expires_at(now: int | None = None) -> int:
@@ -223,7 +228,7 @@ class LiveVerify:
         started = time.perf_counter()
         req_text = f"POST /verification/digilocker\n{json.dumps({'verification_id': verification_id, 'document_requested': ['AADHAAR'], 'user_flow': 'signup'})}"
         if not _cashfree_ready():
-            _provider_log("integration.cashfree.digilocker", ok=False, status=503, started=started, target="digilocker", reason="Verification provider is not configured.", request=req_text)
+            _provider_log("integration.cashfree.digilocker", ok=False, status=503, started=started, target="digilocker", reason=MSG_PROVIDER_UNCONFIGURED, request=req_text)
             return None
         data, http_status, provider_reason = _cashfree_call(
             "/verification/digilocker",
@@ -235,7 +240,7 @@ class LiveVerify:
         )
         safe = _cashfree_link(data) if data else None
         if not safe:
-            reason = provider_reason or "Verification provider rejected the check."
+            reason = provider_reason or MSG_PROVIDER_REJECTED
             _provider_log(
                 "integration.cashfree.digilocker",
                 ok=False,
@@ -262,11 +267,11 @@ class LiveVerify:
         started = time.perf_counter()
         req_text = f"GET /verification/digilocker?verification_id={verification_id}"
         if not _cashfree_ready():
-            _provider_log("integration.cashfree.digilocker", ok=False, status=503, started=started, target="digilocker", reason="Verification provider is not configured.", request=req_text)
+            _provider_log("integration.cashfree.digilocker", ok=False, status=503, started=started, target="digilocker", reason=MSG_PROVIDER_UNCONFIGURED, request=req_text)
             return False
         data, http_status, provider_reason = _cashfree_get("/verification/digilocker", {"verification_id": verification_id})
         if not data:
-            reason = provider_reason or "Verification provider rejected the check."
+            reason = provider_reason or MSG_PROVIDER_REJECTED
             _provider_log(
                 "integration.cashfree.digilocker",
                 ok=False,
@@ -285,7 +290,7 @@ class LiveVerify:
                 status=200,
                 started=started,
                 target="digilocker",
-                reason="Verification provider rejected the check.",
+                reason=MSG_PROVIDER_REJECTED,
                 request=req_text,
                 response=f"HTTP 200\n{json.dumps({'status': cf_status})}",
             )
@@ -298,7 +303,7 @@ class LiveVerify:
             status=200,
             started=started,
             target="digilocker",
-            reason="" if ok else "Verification provider rejected the check.",
+            reason="" if ok else MSG_PROVIDER_REJECTED,
             request=req_text,
             response=f"HTTP 200\n{json.dumps({'status': cf_status, 'aadhaar_consent': ok})}",
         )
@@ -333,13 +338,13 @@ class LiveVerify:
         started = time.perf_counter()
         req_text = 'POST /verification/pan\n{"pan":"[redacted]"}'
         if not _cashfree_ready():
-            _provider_log("integration.cashfree.pan", ok=False, status=503, started=started, target="pan", reason="Verification provider is not configured.", request=req_text)
+            _provider_log(ACTION_CF_PAN, ok=False, status=503, started=started, target="pan", reason=MSG_PROVIDER_UNCONFIGURED, request=req_text)
             return False, ""
         data, http_status, provider_reason = _cashfree_call("/verification/pan", {"pan": pan, "name": name})
         if not data:
-            reason = provider_reason or "Verification provider rejected the check."
+            reason = provider_reason or MSG_PROVIDER_REJECTED
             _provider_log(
-                "integration.cashfree.pan",
+                ACTION_CF_PAN,
                 ok=False,
                 status=http_status if http_status >= 400 else 502,
                 started=started,
@@ -352,12 +357,12 @@ class LiveVerify:
         registered = str(data.get("registered_name") or "")
         ok = status in {"VALID", "SUCCESS", "TRUE"} and _same_name(name, registered)
         _provider_log(
-            "integration.cashfree.pan",
+            ACTION_CF_PAN,
             ok=ok,
             status=200,
             started=started,
             target="pan",
-            reason="" if ok else "Verification provider rejected the check.",
+            reason="" if ok else MSG_PROVIDER_REJECTED,
             request=req_text,
             response=f"HTTP 200\n{json.dumps({'status': status, 'name_match': ok})}",
         )
@@ -372,13 +377,13 @@ class LiveVerify:
         started = time.perf_counter()
         req_text = 'POST /verification/gstin\n{"GSTIN":"[redacted]"}'
         if not _cashfree_ready():
-            _provider_log("integration.cashfree.gstin", ok=False, status=503, started=started, target="gstin", reason="Verification provider is not configured.", request=req_text)
+            _provider_log(ACTION_CF_GSTIN, ok=False, status=503, started=started, target="gstin", reason=MSG_PROVIDER_UNCONFIGURED, request=req_text)
             return False, {}
         data, http_status, provider_reason = _cashfree_call("/verification/gstin", {"GSTIN": gstin})
         if not data:
-            reason = provider_reason or "Verification provider rejected the check."
+            reason = provider_reason or MSG_PROVIDER_REJECTED
             _provider_log(
-                "integration.cashfree.gstin",
+                ACTION_CF_GSTIN,
                 ok=False,
                 status=http_status if http_status >= 400 else 502,
                 started=started,
@@ -396,12 +401,12 @@ class LiveVerify:
             "status": status or ("ACTIVE" if valid is True else ""),
         }
         _provider_log(
-            "integration.cashfree.gstin",
+            ACTION_CF_GSTIN,
             ok=ok,
             status=200,
             started=started,
             target="gstin",
-            reason="" if ok else "Verification provider rejected the check.",
+            reason="" if ok else MSG_PROVIDER_REJECTED,
             request=req_text,
             response=f"HTTP 200\n{json.dumps({'status': record['status'], 'valid': bool(ok)})}",
         )
@@ -413,16 +418,16 @@ class LiveVerify:
         safe_id = re.sub(r"[^A-Za-z0-9._-]", "", verification_id)[:50] or "signup"
         req_text = f"POST /verification/udyam\n{json.dumps({'verification_id': safe_id, 'udyam': '[redacted]'})}"
         if not _cashfree_ready():
-            _provider_log("integration.cashfree.udyam", ok=False, status=503, started=started, target="udyam", reason="Verification provider is not configured.", request=req_text)
+            _provider_log(ACTION_CF_UDYAM, ok=False, status=503, started=started, target="udyam", reason=MSG_PROVIDER_UNCONFIGURED, request=req_text)
             return False, ""
         data, http_status, provider_reason = _cashfree_call(
             "/verification/udyam",
             {"verification_id": safe_id, "udyam": udyam},
         )
         if not data:
-            reason = provider_reason or "Verification provider rejected the check."
+            reason = provider_reason or MSG_PROVIDER_REJECTED
             _provider_log(
-                "integration.cashfree.udyam",
+                ACTION_CF_UDYAM,
                 ok=False,
                 status=http_status if http_status >= 400 else 502,
                 started=started,
@@ -435,12 +440,12 @@ class LiveVerify:
         enterprise = str(data.get("enterprise_name") or "").strip()
         ok = status == "SUCCESS" and bool(enterprise)
         _provider_log(
-            "integration.cashfree.udyam",
+            ACTION_CF_UDYAM,
             ok=ok,
             status=200,
             started=started,
             target="udyam",
-            reason="" if ok else "Verification provider rejected the check.",
+            reason="" if ok else MSG_PROVIDER_REJECTED,
             request=req_text,
             response=f"HTTP 200\n{json.dumps({'status': status, 'name_present': bool(enterprise)})}",
         )
@@ -697,7 +702,7 @@ def _cashfree_call(path: str, payload: dict) -> tuple[dict | None, int, str]:
     headers = _cashfree_headers()
     root = os.environ.get("CASHFREE_VERIFICATION_BASE_URL", "https://api.cashfree.com").rstrip("/")
     if not headers:
-        return None, 503, "Verification provider is not configured."
+        return None, 503, MSG_PROVIDER_UNCONFIGURED
     status, body = _post(
         root + path,
         json.dumps(payload).encode(),
@@ -710,7 +715,7 @@ def _cashfree_get(path: str, query: dict) -> tuple[dict | None, int, str]:
     headers = _cashfree_headers()
     root = os.environ.get("CASHFREE_VERIFICATION_BASE_URL", "https://api.cashfree.com").rstrip("/")
     if not headers:
-        return None, 503, "Verification provider is not configured."
+        return None, 503, MSG_PROVIDER_UNCONFIGURED
     encoded = "&".join(f"{key}={urllib.request.quote(str(value))}" for key, value in query.items())
     del headers["Content-Type"]
     status, body = _request(

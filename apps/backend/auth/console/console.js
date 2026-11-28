@@ -1571,10 +1571,14 @@
   async function verifiedFromPeople() {
     const people = await call("/api/auth/desk/people");
     if (!people.ok) return [];
+    const persons = people.data.people || [];
+    const files = await Promise.all(
+      persons.map((person) => call("/api/auth/desk/users/file?user_id=" + encodeURIComponent(person.id))),
+    );
     const listed = [];
-    for (const person of people.data.people || []) {
-      const file = await call("/api/auth/desk/users/file?user_id=" + encodeURIComponent(person.id));
-      const profiles = file.ok ? file.data.profiles || [] : [];
+    persons.forEach((person, index) => {
+      const file = files[index];
+      const profiles = file && file.ok ? file.data.profiles || [] : [];
       for (const role of person.roles || []) {
         if (role !== "customer" && role !== "retailer") continue;
         const stored = profiles.find((entry) => entry.role === role);
@@ -1593,7 +1597,7 @@
           verified_at: person.created_at || 0,
         });
       }
-    }
+    });
     listed.sort((a, b) => (b.verified_at || 0) - (a.verified_at || 0));
     return listed;
   }
@@ -4246,12 +4250,13 @@
     room(saved.room, { restore: true });
   });
 
-  function notify(message) {
+  function notify(message, isError = false) {
     const toast = document.getElementById("toast");
     toast.textContent = message;
+    toast.classList.toggle("is-error", Boolean(isError));
     toast.classList.add("show");
     clearTimeout(notify.timer);
-    notify.timer = setTimeout(() => toast.classList.remove("show"), 2600);
+    notify.timer = setTimeout(() => toast.classList.remove("show", "is-error"), 2600);
   }
 
   document.querySelectorAll("[data-toast]").forEach((button) => {

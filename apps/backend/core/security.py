@@ -81,7 +81,8 @@ def fetch_session(access_token: str, *, base_url: str | None = None) -> dict:
     except urllib.error.HTTPError as exc:
         raw = exc.read()
         status = exc.code
-    except (OSError, urllib.error.URLError):
+    except OSError:
+        # URLError is an OSError subclass; keep one handler.
         raise SessionRejected(401, "Sign in again.") from None
     try:
         payload = json.loads(raw.decode() or "{}")

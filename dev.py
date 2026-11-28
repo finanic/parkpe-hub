@@ -37,6 +37,7 @@ def main() -> int:
     stopping = False
 
     def stop(_signum: int | None = None, _frame: object = None) -> None:
+        """Terminate every child process once; ignore repeated signals."""
         nonlocal stopping
         if stopping:
             return

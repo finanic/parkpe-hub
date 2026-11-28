@@ -774,10 +774,11 @@ function brandScreen() {
   const savers = [...brands]
     .sort((a, b) => b[3] - a[3])
     .slice(0, 5)
-    .map(
-      ([, name, , off, tagline, amounts, color]) =>
-        `<button type="button" data-brand-buy="${esc(name)}" data-off="${off}" data-color="${color}" data-amounts="${amounts}" data-initial="${brandInitial(name)}"><span class="svc-avatar" style="background:${color}">${brandInitial(name)}</span><span><strong>${esc(name)}</strong><small>${esc(tagline)}</small></span><b>${off}% OFF</b></button>`,
-    )
+    .map(([, name, , off, tagline, amounts, color]) => {
+      const initial = esc(brandInitial(name));
+      const tone = esc(color);
+      return `<button type="button" data-brand-buy="${esc(name)}" data-off="${esc(off)}" data-color="${tone}" data-amounts="${esc(amounts)}" data-initial="${initial}"><span class="svc-avatar" style="background:${tone}">${initial}</span><span><strong>${esc(name)}</strong><small>${esc(tagline)}</small></span><b>${esc(off)}% OFF</b></button>`;
+    })
     .join("");
   return `
     <section class="svc">

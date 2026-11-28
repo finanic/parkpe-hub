@@ -80,6 +80,11 @@ def _split_csv(value: str) -> set[str]:
     return {item.strip().rstrip("/") for item in value.split(",") if item.strip()}
 
 
+MSG_SIGN_IN_AGAIN = "Sign in again."
+MSG_SEND_JSON = "Send JSON."
+MSG_CODE_INCORRECT = "Code is incorrect."
+MSG_ADMIN_REQUIRED = "Admin session required."
+
 # console.js quotes this sentence from the log reader. No code, address, or provider body.
 _AUDIT_WHY = {
     "login_failed": "The email or password did not match.",
@@ -197,15 +202,15 @@ class AuthApp:
                 raw = request.rfile.read(length) if length else b""
                 if raw:
                     if request.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
-                        self._json(request, 415, {"error": "Send JSON."}, origin)
+                        self._json(request, 415, {"error": MSG_SEND_JSON}, origin)
                         return
                     try:
                         body = json.loads(raw)
                     except json.JSONDecodeError:
-                        self._json(request, 400, {"error": "Send JSON."}, origin)
+                        self._json(request, 400, {"error": MSG_SEND_JSON}, origin)
                         return
                 if not isinstance(body, dict):
-                    self._json(request, 400, {"error": "Send JSON."}, origin)
+                    self._json(request, 400, {"error": MSG_SEND_JSON}, origin)
                     return
             ip = request.client_address[0]
             if method == "POST" and path == Paths.REGISTER:
@@ -497,12 +502,12 @@ class AuthApp:
                 ip,
                 user["id"],
                 request=mfa_req,
-                response='HTTP 401\n{"error":"Code is incorrect."}',
+                response=f'HTTP 401\n{json.dumps({"error": MSG_CODE_INCORRECT})}',
             )
-            self._json(request, 401, {"error": "Code is incorrect."}, origin, cookies=[self._clear(MFA_COOKIE, MFA_PATH)])
+            self._json(request, 401, {"error": MSG_CODE_INCORRECT}, origin, cookies=[self._clear(MFA_COOKIE, MFA_PATH)])
             return
         if not user or not user["mfa_enabled"]:
-            self._json(request, 401, {"error": "Code is incorrect."}, origin, cookies=[self._clear(MFA_COOKIE, MFA_PATH)])
+            self._json(request, 401, {"error": MSG_CODE_INCORRECT}, origin, cookies=[self._clear(MFA_COOKIE, MFA_PATH)])
             return
         ok = self._accept_totp(user, code) or self.store.use_backup(user["id"], code)
         if not ok:
@@ -512,13 +517,13 @@ class AuthApp:
                 ip,
                 user["id"],
                 request=mfa_req,
-                response='HTTP 401\n{"error":"Code is incorrect."}',
+                response=f'HTTP 401\n{json.dumps({"error": MSG_CODE_INCORRECT})}',
             )
             cookies = None
             if count >= MAX_FAILS:
                 self.store.use_challenge(challenge)
                 cookies = [self._clear(MFA_COOKIE, MFA_PATH)]
-            self._json(request, 401, {"error": "Code is incorrect."}, origin, cookies=cookies)
+            self._json(request, 401, {"error": MSG_CODE_INCORRECT}, origin, cookies=cookies)
             return
         self.store.use_challenge(challenge)
         active = row["role"] or user["role"]
@@ -547,7 +552,7 @@ class AuthApp:
     def _mfa_setup(self, request, ip, origin) -> None:
         session = self._session(request)
         if not session or session["scope"] != SCOPE_ENROLL:
-            self._json(request, 401, {"error": "Sign in again."}, origin)
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin)
             return
         user = self.store.user_by_id(session["user_id"])
         if not user or user["mfa_enabled"]:
@@ -579,11 +584,11 @@ class AuthApp:
         session = self._session(request)
         code = body.get("code") if isinstance(body.get("code"), str) else ""
         if not session or session["scope"] != SCOPE_ENROLL:
-            self._json(request, 401, {"error": "Sign in again."}, origin)
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin)
             return
         user = self.store.user_by_id(session["user_id"])
         if not user or not user["mfa_secret"] or not self._accept_totp(user, code):
-            self._json(request, 401, {"error": "Code is incorrect."}, origin)
+            self._json(request, 401, {"error": MSG_CODE_INCORRECT}, origin)
             return
         self.store.enable_mfa(user["id"])
         self.store.revoke_user(user["id"])
@@ -609,7 +614,7 @@ class AuthApp:
     def _refresh(self, request, ip, origin) -> None:
         refresh = self._read_cookie(request, REFRESH_COOKIE)
         if not refresh:
-            self._json(request, 401, {"error": "Sign in again."}, origin)
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin)
             return
         new_refresh = new_token()
         row = self.store.rotate_refresh(refresh, new_refresh, int(time.time()) + REFRESH_TTL)
@@ -618,9 +623,9 @@ class AuthApp:
                 "refresh_reuse",
                 ip,
                 request=f"POST {Paths.REFRESH}",
-                response='HTTP 401\n{"error":"Sign in again."}',
+                response=f'HTTP 401\n{json.dumps({"error": MSG_SIGN_IN_AGAIN})}',
             )
-            self._json(request, 401, {"error": "Sign in again."}, origin, cookies=self._clear_all())
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin, cookies=self._clear_all())
             return
         access = new_token()
         active = row["role"] if "role" in row.keys() and row["role"] else ""
@@ -632,7 +637,7 @@ class AuthApp:
             or not self.store.has_membership(row["user_id"], active)
         ):
             self.store.revoke_session_family(row["id"])
-            self._json(request, 401, {"error": "Sign in again."}, origin, cookies=self._clear_all())
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin, cookies=self._clear_all())
             return
         self.store.save_access(access, row["id"], row["user_id"], row["scope"], int(time.time()) + ACCESS_TTL, active)
         self._json(
@@ -675,10 +680,10 @@ class AuthApp:
         user = self.store.user_by_id(session["user_id"]) if session else None
         role = (session["role"] or user["role"]) if session and user else ""
         if not session or not user or session["scope"] != SCOPE_FULL:
-            self._json(request, 401, {"error": "Sign in again."}, origin)
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin)
             return None
         if not console or role != ROLE_ADMIN:
-            self._json(request, 403, {"error": "Admin session required."}, origin)
+            self._json(request, 403, {"error": MSG_ADMIN_REQUIRED}, origin)
             return None
         return user
 
@@ -1355,11 +1360,11 @@ class AuthApp:
     def _me(self, request, origin) -> None:
         session = self._session(request)
         if not session:
-            self._json(request, 401, {"error": "Sign in again."}, origin)
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin)
             return
         user = self.store.user_by_id(session["user_id"])
         if not user:
-            self._json(request, 401, {"error": "Sign in again."}, origin)
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin)
             return
         active = session["role"] or user["role"]
         if session["scope"] != SCOPE_FULL:
@@ -1371,7 +1376,7 @@ class AuthApp:
             )
             return
         if not user["sign_in"] or not active or not self.store.has_membership(user["id"], active):
-            self._json(request, 401, {"error": "Sign in again."}, origin)
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin)
             return
         prof = self.store.self_profile(user["id"], active)
         self._json(
@@ -1391,18 +1396,18 @@ class AuthApp:
     def _full_user_session(self, request, origin):
         session = self._session(request)
         if not session:
-            self._json(request, 401, {"error": "Sign in again."}, origin)
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin)
             return None, None, ""
         user = self.store.user_by_id(session["user_id"])
         if not user:
-            self._json(request, 401, {"error": "Sign in again."}, origin)
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin)
             return None, None, ""
         active = session["role"] or user["role"]
         if session["scope"] != SCOPE_FULL:
             self._json(request, 403, {"error": "Turn on the authenticator first."}, origin)
             return None, None, ""
         if not user["sign_in"] or not active or not self.store.has_membership(user["id"], active):
-            self._json(request, 401, {"error": "Sign in again."}, origin)
+            self._json(request, 401, {"error": MSG_SIGN_IN_AGAIN}, origin)
             return None, None, ""
         return session, user, active
 

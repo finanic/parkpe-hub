@@ -85,7 +85,8 @@ def forwards_seed(apps, schema_editor):
 
 
 def backwards_noop(apps, schema_editor):
-    pass
+    """Data forward-fill cannot be reversed safely; keep schema reverse only."""
+    return None
 
 
 class Migration(migrations.Migration):

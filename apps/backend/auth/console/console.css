@@ -925,6 +925,7 @@ main {
   pointer-events: none;
 }
 .toast.show { opacity: 1; transform: none; }
+.toast.is-error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
 
 .people-layout {
   display: grid;

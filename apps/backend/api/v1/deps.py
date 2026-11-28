@@ -30,6 +30,7 @@ from core.security import (
 from domain.common.scope import PARKPE, PAYSWAP, BadContext
 
 APP_CONTEXT_HEADER = "X-App-Context"
+MSG_SIGN_IN_AGAIN = "Sign in again."
 
 
 class Actor:
@@ -67,7 +68,7 @@ class AppContextAuthentication(BaseAuthentication):
             raise ParseError(detail={"error": exc.message, "code": "validation"}) from exc
         token = request.COOKIES.get(ACCESS_COOKIE, "")
         if not token:
-            raise AuthenticationFailed(detail={"error": "Sign in again.", "code": "unauthenticated"})
+            raise AuthenticationFailed(detail={"error": MSG_SIGN_IN_AGAIN, "code": "unauthenticated"})
         try:
             session = fetch_session(token)
         except SessionRejected as exc:
@@ -85,13 +86,13 @@ class AppScopePermission(BasePermission):
         required = getattr(view, "app_context", None)
         actor = request.user
         if required not in {PARKPE, PAYSWAP} or actor is None or not getattr(actor, "is_authenticated", False):
-            raise PermissionDenied(detail={"error": "Sign in again.", "code": "forbidden_app"})
+            raise PermissionDenied(detail={"error": MSG_SIGN_IN_AGAIN, "code": "forbidden_app"})
         if actor.app_context != required or not role_matches(actor.app_context, actor.role):
             raise PermissionDenied(
                 detail={"error": "This account cannot use that app.", "code": "forbidden_app"}
             )
         if not actor.user_id:
-            raise PermissionDenied(detail={"error": "Sign in again.", "code": "forbidden_app"})
+            raise PermissionDenied(detail={"error": MSG_SIGN_IN_AGAIN, "code": "forbidden_app"})
         return True
 
 
