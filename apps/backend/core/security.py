@@ -18,10 +18,11 @@ import os
 import urllib.error
 import urllib.request
 
+from auth.contract import ACCESS_COOKIE
 from domain.common.scope import ROLE_FOR_CONTEXT, BadContext, parse_context
 
-# apps/backend/auth/contract.py ACCESS_COOKIE and HEADER. Issued on port 4600.
-ACCESS_COOKIE = "auth_access"
+# Header and /api/auth/me path from apps/backend/auth/contract.py. Cookie name
+# is ACCESS_COOKIE in that file, issued on port 4600.
 AUTH_REQUEST_HEADER = "X-Auth-Request"
 AUTH_ME_PATH = "/api/auth/me"
 
@@ -61,6 +62,9 @@ def fetch_session(access_token: str, *, base_url: str | None = None) -> dict:
     Does not send the refresh cookie. A 403 with mfa_setup_required stays a 403.
     """
     base = (base_url or os.environ.get("AUTH_BASE_URL") or "http://127.0.0.1:4600").rstrip("/")
+    # Only http(s) may leave this process. file: and other schemes stay blocked.
+    if not (base.startswith("http://") or base.startswith("https://")):
+        raise SessionRejected(401, "Sign in again.")
     request = urllib.request.Request(
         base + AUTH_ME_PATH,
         headers={
@@ -77,7 +81,8 @@ def fetch_session(access_token: str, *, base_url: str | None = None) -> dict:
     except urllib.error.HTTPError as exc:
         raw = exc.read()
         status = exc.code
-    except (OSError, urllib.error.URLError):
+    except OSError:
+        # URLError is an OSError subclass; keep one handler.
         raise SessionRejected(401, "Sign in again.") from None
     try:
         payload = json.loads(raw.decode() or "{}")

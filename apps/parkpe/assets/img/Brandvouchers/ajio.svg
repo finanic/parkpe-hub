@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="24" fill="#1A1A1A"/>
+  <text x="60" y="60" font-family="Arial,sans-serif" font-size="22" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">AJIO</text>
+  <rect x="30" y="76" width="60" height="3" rx="1.5" fill="#FF5722"/>
+</svg>

@@ -3,7 +3,7 @@
    Live client: apps/payswap/js/session.js, role "retailer"
    (packages/contracts, apps/backend/auth/contract.py ROLE_RETAILER).
    ParkPe must not load that file, and this shell must not load apps/parkpe/js.
-   App context for apps/backend/api/v1/deps.py is payswap, via packages/sdk-client.
+   App context for apps/backend/api/v1/deps.py is payswap, via apps/payswap/js/hub.js.
 */
 
 export const core = Object.freeze({ app: "payswap" });

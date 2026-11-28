@@ -1,21 +1,17 @@
-const slides = [
-  {
-    reg: "DL 01 AB 1234",
-    subtitle: "Hyundai Creta | Polar White",
-    insurance: { text: "12 Mar 2027", alert: false },
-    puc: { text: "Exp: 18 days", alert: true, label: "PUC expires in 18 days" },
-    fitness: { text: "4 Jan 2028", alert: false },
-    rc: { text: "Verified", alert: false },
-  },
-  {
-    reg: "HR 26 DK 9081",
-    subtitle: "Maruti Suzuki Swift | Magma Grey",
-    insurance: { text: "Expired", alert: true, label: "Insurance has expired" },
-    puc: { text: "22 Aug 2026", alert: false },
-    fitness: { text: "—", alert: false },
-    rc: { text: "Verified", alert: false },
-  },
-];
+/* ParkPe dashboard shell for apps/parkpe/dashboard/index.html.
+
+   Live customer profile, vehicles, and parking sessions from 4600 & 4610.
+   Screen HTML comes from apps/parkpe/js/screens.js (window.ParkpeScreens).
+   Must not load apps/payswap/js/session.js.
+*/
+let slides = [];
+
+window.ParkpeData = {
+  user: null,
+  profile: null,
+  vehicles: [],
+  sessions: [],
+};
 
 const services = {
   "bill-payments": {
@@ -77,6 +73,11 @@ const services = {
     title: "Settings",
     icon: "settings",
     blurb: "Password, alerts and the preferences for this account.",
+  },
+  signup: {
+    title: "Create account",
+    icon: "person_add",
+    blurb: "An admin opens this account from the backend desk.",
   },
   profile: {
     title: "Profile",
@@ -176,30 +177,23 @@ function alertItems() {
 }
 
 function reminderItems() {
-  const vehicleReminders = alertItems().map((item) => ({
+  return alertItems().map((item) => ({
     title: item.label,
     body: item.reg,
     type: "Reminder",
     view: "dashboard",
     slide: item.index,
   }));
-  return [
-    ...vehicleReminders,
-    {
-      title: "FASTag balance low",
-      body: "HR 26 DK 9081 balance is below ₹200.",
-      type: "Reminder",
-      view: "fastag",
-    },
-  ];
 }
 
 function renderSummary() {
   greeting.textContent = hourGreeting();
-  const due = document.querySelectorAll(".table-row.is-due").length;
+  const activeCount = (window.ParkpeData.sessions || []).filter((s) => s.state !== "closed").length;
   const parts = [`${slides.length} vehicle${slides.length === 1 ? "" : "s"}`];
-  if (due) parts.push(`${due} parking session due`);
-  welcomeSummary.textContent = parts.join(" · ");
+  if (activeCount) parts.push(`${activeCount} active parking session`);
+  welcomeSummary.textContent = window.ParkpeData.user
+    ? parts.join(" · ")
+    : "Sign in to manage your vehicles and parking sessions.";
 }
 
 function renderNotifications() {
@@ -237,10 +231,21 @@ function renderNotifications() {
 }
 
 function renderSlide(index) {
-  const slide = slides[index];
+  if (!slides.length) {
+    slideRoot.querySelector("h2").textContent = "No vehicles yet";
+    slideRoot.querySelector(".hero-sub").textContent = "Add a vehicle in Connect Hub to track documents and QR sessions.";
+    slideCount.textContent = "0 / 0";
+    slideRoot.querySelectorAll(".stat").forEach((card) => {
+      card.classList.remove("is-alert");
+      card.querySelector("strong").textContent = "—";
+    });
+    return;
+  }
+  const safeIdx = ((index % slides.length) + slides.length) % slides.length;
+  const slide = slides[safeIdx];
   slideRoot.querySelector("h2").textContent = slide.reg;
   slideRoot.querySelector(".hero-sub").textContent = slide.subtitle;
-  slideCount.textContent = `${index + 1} / ${slides.length}`;
+  slideCount.textContent = `${safeIdx + 1} / ${slides.length}`;
   slideRoot.querySelectorAll(".stat").forEach((card) => {
     const value = slide[card.dataset.key];
     card.classList.toggle("is-alert", value.alert);
@@ -486,10 +491,32 @@ markRead.addEventListener("click", () => {
 });
 
 document.querySelectorAll(".js-logout").forEach((button) => {
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     closeMenus();
-    showToast("Logout will work once sign-in is connected. This preview stays open.");
+    if (window.ParkpeSession) await window.ParkpeSession.signOut();
+    window.ParkpeData = { user: null, profile: null, vehicles: [], sessions: [] };
+    slides = [];
+    await bootParkpe();
+    showToast("Signed out.");
   });
+});
+
+document.getElementById("parkpe-login-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const msg = form.querySelector("[data-parkpe-login-msg]");
+  if (msg) msg.textContent = "";
+  const email = form.elements.email?.value.trim();
+  const password = form.elements.password?.value;
+  if (!window.ParkpeSession) return;
+  const res = await window.ParkpeSession.login(email, password);
+  if (!res.ok) {
+    if (msg) msg.textContent = res.data.error || "Sign in failed.";
+    return;
+  }
+  form.reset();
+  await bootParkpe();
+  showToast("Signed in to ParkPe.");
 });
 
 document.querySelector(".carousel-prev").addEventListener("click", () => {
@@ -510,9 +537,97 @@ document.addEventListener("visibilitychange", () => {
 
 window.addEventListener("hashchange", routeFromHash);
 
-unread = reminderItems();
-renderSummary();
-renderSlide(0);
-renderNotifications();
+function renderSessionsTable(sessions) {
+  const table = document.querySelector("[data-parkpe-sessions-table]");
+  if (!table) return;
+  table.querySelectorAll(".table-row").forEach((r) => r.remove());
+  if (!sessions.length) {
+    const row = document.createElement("div");
+    row.className = "table-row";
+    row.innerHTML = `<span>—</span><span>No parking sessions recorded yet.</span><span>—</span><span class="status">—</span>`;
+    table.appendChild(row);
+    return;
+  }
+  sessions.slice(0, 6).forEach((s) => {
+    const row = document.createElement("div");
+    row.className = "table-row";
+    const stClass = s.state === "closed" ? "status-paid" : "status-active";
+    const vEl = document.createElement("strong");
+    vEl.textContent = s.vehicle || "—";
+    const locEl = document.createElement("span");
+    locEl.textContent = `${s.site_code || "—"}${s.bay ? " · Bay " + s.bay : ""}`;
+    const refEl = document.createElement("span");
+    refEl.textContent = s.reference || "—";
+    const stEl = document.createElement("span");
+    stEl.className = `status ${stClass}`;
+    stEl.textContent = s.state || "active";
+    row.append(vEl, locEl, refEl, stEl);
+    table.appendChild(row);
+  });
+}
+
+async function bootParkpe() {
+  const wall = document.getElementById("parkpe-login-wall");
+  const nameEl = document.querySelector("[data-parkpe-user-name]");
+  const emailEl = document.querySelector("[data-parkpe-user-email]");
+  const avatarEl = document.querySelector("[data-parkpe-avatar]");
+
+  let me = null;
+  if (window.ParkpeSession) {
+    const res = await window.ParkpeSession.current();
+    if (res.ok && res.data && res.data.role === "customer") {
+      me = res.data;
+    }
+  }
+  window.ParkpeData.user = me;
+
+  if (!me) {
+    if (wall) wall.hidden = false;
+    if (nameEl) nameEl.textContent = "Sign in";
+    if (emailEl) emailEl.textContent = "Customer account";
+    if (avatarEl) avatarEl.textContent = "—";
+    slides = [];
+    window.ParkpeData.vehicles = [];
+    window.ParkpeData.sessions = [];
+    renderSessionsTable([]);
+  } else {
+    if (wall) wall.hidden = true;
+    const disp = me.display_name || me.email.split("@")[0];
+    if (nameEl) nameEl.textContent = disp;
+    if (emailEl) emailEl.textContent = me.email;
+    if (avatarEl) avatarEl.textContent = disp.slice(0, 2).toUpperCase();
+
+    const [profRes, vehRes, sessRes] = await Promise.all([
+      window.ParkpeSession.profile(),
+      window.ParkpeHub ? window.ParkpeHub.vehicles() : Promise.resolve({ ok: false, data: {} }),
+      window.ParkpeHub ? window.ParkpeHub.sessions() : Promise.resolve({ ok: false, data: {} }),
+    ]);
+    window.ParkpeData.profile = profRes.ok ? profRes.data : null;
+    const vehicles = vehRes.ok ? (vehRes.data.vehicles || []) : [];
+    const sessions = sessRes.ok ? (sessRes.data.sessions || []) : [];
+    window.ParkpeData.vehicles = vehicles;
+    window.ParkpeData.sessions = sessions;
+    slides = vehicles.map((v) => ({
+      reg: v.registration,
+      subtitle: [v.make_model, v.color].filter(Boolean).join(" | ") || "Registered vehicle",
+      insurance: { text: v.insurance_expiry || "—", alert: false },
+      puc: { text: v.puc_expiry || "—", alert: false },
+      fitness: { text: v.fitness_expiry || "—", alert: false },
+      rc: { text: v.rc_status || "Pending", alert: false },
+    }));
+    renderSessionsTable(sessions);
+  }
+
+  unread = reminderItems();
+  renderSummary();
+  renderSlide(0);
+  renderNotifications();
+  if (!dashboardView.hidden) return;
+  const activeView = (location.hash || "#dashboard").replace(/^#/, "");
+  if (activeView && services[activeView]) window.ParkpeScreens.mount(serviceView, activeView);
+}
+
+window.ParkpeReload = bootParkpe;
+bootParkpe();
 restartAutoplay();
 routeFromHash();

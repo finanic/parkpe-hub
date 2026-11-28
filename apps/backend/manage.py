@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Django entry for the unified API. Makefile `hub` does not call this file.
+"""Django entry for the unified API on port 4610.
 
-`make hub` still runs apps/backend/run.py (apps/backend/auth/server.py on port 4600).
-Start this process separately:
+`make hub` still runs apps/backend/run.py (auth on port 4600).
+`make api` and `python3 dev.py` start this process:
 
-  python apps/backend/manage.py runserver 127.0.0.1:4610
+  python apps/backend/manage.py runserver --noreload 127.0.0.1:4610
 """
 
 from __future__ import annotations
@@ -18,6 +18,16 @@ sys.path.insert(0, str(APP_DIR))
 if __name__ == "__main__":
     import os
 
+    from config.envfile import load_backend_env
+    from integrations.bbps import load_local_env as load_bbps_env
+    from integrations.kaleyra import load_local_env as load_kaleyra_env
+    from auth.verify import load_cashfree_env, load_mail_env
+
+    load_backend_env()
+    load_kaleyra_env()
+    load_mail_env()
+    load_cashfree_env()
+    load_bbps_env()
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
     from django.core.management import execute_from_command_line
 

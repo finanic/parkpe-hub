@@ -8,54 +8,83 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,500,0,0&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/app.css?v=3" />
+    <link rel="stylesheet" href="css/app.css?v=37" />
   </head>
   <body>
     <a class="skip" href="#content">Skip to counter</a>
     <div class="gate" id="gate">
-      <form class="gate-card" id="auth-login" data-gate="login" autocomplete="on">
-        <img src="assets/payswap-logo.svg" alt="PaySwap" />
-        <p class="kicker">Retailer counter</p>
-        <h1>Sign in</h1>
-        <p>The counter stays closed until this account signs in and the authenticator is on.</p>
-        <label class="field">Email<input name="email" type="email" autocomplete="username" required /></label>
-        <label class="field">Password<input name="password" type="password" autocomplete="current-password" required /></label>
-        <p class="error" data-auth-error hidden></p>
-        <button class="btn yellow block" type="submit">Sign in</button>
-        <button class="linkish" type="button" data-show="register">Create a retailer account</button>
-      </form>
-      <form class="gate-card" id="auth-register" data-gate="register" hidden autocomplete="on">
-        <img src="assets/payswap-logo.svg" alt="PaySwap" />
-        <p class="kicker">New outlet</p>
-        <h1>Create account</h1>
-        <p>Use 12 or more characters. The authenticator step comes right after this.</p>
-        <label class="field">Email<input name="email" type="email" autocomplete="username" required /></label>
-        <label class="field">Password<input name="password" type="password" autocomplete="new-password" minlength="12" required /></label>
-        <p class="error" data-auth-error hidden></p>
-        <button class="btn yellow block" type="submit">Create account</button>
-        <button class="linkish" type="button" data-show="login">I already have an account</button>
-      </form>
-      <form class="gate-card" id="auth-mfa" data-gate="mfa" hidden>
-        <p class="kicker">Second step</p>
-        <h1>Authenticator code</h1>
-        <p>Enter the 6-digit code from the authenticator app, or a backup code.</p>
-        <label class="field">Code<input name="code" inputmode="text" autocomplete="one-time-code" required /></label>
-        <p class="error" data-auth-error hidden></p>
-        <button class="btn yellow block" type="submit">Open counter</button>
-      </form>
-      <section class="gate-card" id="auth-enroll" data-gate="enroll" hidden>
-        <p class="kicker">Required</p>
-        <h1>Turn on the authenticator</h1>
-        <p>Add this key in Google Authenticator, Authy, or 1Password. The counter opens only after a code matches.</p>
-        <button class="btn yellow block" type="button" id="start-enroll">Generate key</button>
-        <p class="secret" data-enroll-secret hidden></p>
-        <p class="codes" data-enroll-codes hidden></p>
-        <form id="enroll-confirm">
-          <label class="field">Code from the app<input name="code" inputmode="numeric" autocomplete="one-time-code" required /></label>
-          <p class="error" data-auth-error hidden></p>
-          <button class="btn yellow block" type="submit">Enable and open counter</button>
-        </form>
+      <section class="gate-context" aria-label="PaySwap retailer counter">
+        <div class="gate-context-brand">
+          <span class="gate-context-mark" aria-hidden="true">P</span>
+          <img src="assets/payswap-logo.svg" alt="PaySwap" />
+        </div>
+        <p class="kicker">Retailer operations</p>
+        <h2 class="gate-context-title">Collect bills. Keep float clear. Close the day with receipts.</h2>
+        <p class="gate-context-copy">One secure counter for Bharat Connect payments, wallet float, and transaction records — protected by authenticator before the desk opens.</p>
+        <ul class="gate-context-points">
+          <li><span class="mi" aria-hidden="true">verified_user</span> Authenticator-protected access</li>
+          <li><span class="mi" aria-hidden="true">receipt_long</span> Live BBPS receipts &amp; history</li>
+          <li><span class="mi" aria-hidden="true">account_balance_wallet</span> Wallet float visibility</li>
+        </ul>
+        <div class="gate-context-foot">
+          <img class="gate-bc-mnemonic" src="assets/bbps/b-mnemonic.svg" alt="" />
+          <span>Bharat Connect enabled counter</span>
+        </div>
       </section>
+      <div class="gate-panel">
+        <form class="gate-card" id="auth-login" data-gate="login" autocomplete="on">
+          <div class="gate-brand-row">
+            <img src="assets/payswap-logo.svg" alt="PaySwap" />
+            <!-- Stage-1 entry: B mnemonic (not B Assured; Assured is success/receipt only) -->
+            <img class="gate-bc-mnemonic" src="assets/bbps/b-mnemonic.svg" alt="Bharat Connect" />
+          </div>
+          <p class="kicker">Retailer counter</p>
+          <h1>Sign in</h1>
+          <p>The counter stays closed until this account signs in and the authenticator is verified.</p>
+          <label class="field">Email<input name="email" type="email" autocomplete="username" required placeholder="retailer@outlet.in" /></label>
+          <label class="field">Password
+            <span class="gate-pass">
+              <input name="password" type="password" autocomplete="current-password" required />
+              <button class="gate-reveal" type="button" data-reveal aria-label="Show password"><span class="mi" aria-hidden="true">visibility</span></button>
+            </span>
+          </label>
+          <p class="error" data-auth-error hidden></p>
+          <button class="btn yellow block" type="submit">Sign in</button>
+          <p class="gate-footnote">Retailer accounts are onboarded and verified on the admin console.</p>
+        </form>
+        <form class="gate-card" id="auth-mfa" data-gate="mfa" hidden>
+          <p class="kicker">Second step</p>
+          <h1>Authenticator code</h1>
+          <p>Enter the 6-digit code from the authenticator app, or a backup code.</p>
+          <label class="field">Code<input name="code" inputmode="text" autocomplete="one-time-code" required placeholder="6-digit code" /></label>
+          <p class="error" data-auth-error hidden></p>
+          <button class="btn yellow block" type="submit">Open counter</button>
+        </form>
+        <section class="gate-card" id="auth-enroll" data-gate="enroll" hidden>
+          <p class="kicker">Required</p>
+          <h1>Turn on the authenticator</h1>
+          <p>Scan the QR, or type the key. The counter opens only after a code matches.</p>
+          <button class="btn yellow block" type="button" id="start-enroll">Generate key</button>
+          <div class="qr" data-enroll-qr hidden>
+            <canvas data-enroll-qr-canvas width="196" height="196" aria-label="Authenticator QR"></canvas>
+            <p>Scan this with the authenticator app.</p>
+          </div>
+          <p class="secret" data-enroll-secret hidden></p>
+          <p class="codes" data-enroll-codes hidden></p>
+          <form id="enroll-confirm">
+            <label class="field">Code from the app<input name="code" inputmode="numeric" autocomplete="one-time-code" required /></label>
+            <p class="error" data-auth-error hidden></p>
+            <button class="btn yellow block" type="submit">Enable and open counter</button>
+          </form>
+        </section>
+        <section class="gate-card gate-card-done" id="auth-signed-out" data-gate="signed-out" hidden>
+          <div class="gate-done-badge" aria-hidden="true"><span class="mi">check_circle</span></div>
+          <p class="kicker">Session closed</p>
+          <h1>Signed out</h1>
+          <p>This retailer counter is locked. Sign in again when you are ready to collect.</p>
+          <button class="btn yellow block" type="button" data-gate-show="login">Sign in again</button>
+        </section>
+      </div>
     </div>
     <div class="shell" hidden>
       <aside class="sidebar" id="sidebar">
@@ -65,20 +94,23 @@
         <nav aria-label="Retailer services">
           <p class="nav-label">Counter</p>
           <a class="nav is-on" href="#home" data-view="home"><span class="mi">dashboard</span> Home</a>
-          <p class="nav-label">Services</p>
-          <a class="nav" href="#aeps" data-view="aeps"><span class="mi">fingerprint</span> AEPS</a>
-          <a class="nav" href="#dmt" data-view="dmt"><span class="mi">send</span> DMT</a>
-          <a class="nav" href="#recharge" data-view="recharge"><span class="mi">smartphone</span> Recharges</a>
-          <a class="nav" href="#bills" data-view="bills"><span class="mi">receipt_long</span> Bill pay</a>
-          <p class="nav-label">Books</p>
-          <a class="nav" href="#wallet" data-view="wallet"><span class="mi">account_balance_wallet</span> Float</a>
-          <a class="nav" href="#transactions" data-view="transactions"><span class="mi">history</span> Transactions</a>
-          <a class="nav" href="#support" data-view="support"><span class="mi">support_agent</span> Support</a>
+          <p class="nav-label" data-nav-group="services">Services</p>
+          <a class="nav" href="#bills" data-view="bills" data-service="bbps"><img class="nav-bc-mnemonic" src="assets/bbps/b-mnemonic.svg" alt="" /> Bill pay</a>
+          <a class="nav" href="#bulk-bills" data-view="bulk-bills" data-service="bbps_bulk" hidden><span class="mi">upload_file</span> Bulk bills</a>
+          <a class="nav" href="#recharge" data-view="recharge" data-service="recharge" hidden><span class="mi">smartphone</span> Recharges</a>
+          <a class="nav" href="#vouchers" data-view="vouchers" data-service="vouchers" hidden><span class="mi">confirmation_number</span> Vouchers</a>
+          <a class="nav" href="#dmt" data-view="dmt" data-service="dmt" hidden><span class="mi">send</span> DMT</a>
+          <a class="nav" href="#aeps" data-view="aeps" data-service="aeps" hidden><span class="mi">fingerprint</span> AEPS</a>
+          <p class="nav-label">Books &amp; Account</p>
+          <a class="nav" href="#wallet" data-view="wallet" data-service="wallet"><span class="mi">account_balance_wallet</span> Float and Ledger</a>
+          <a class="nav" href="#transactions" data-view="transactions" data-service="transactions"><span class="mi">history</span> Transactions</a>
+          <a class="nav" href="#profile" data-view="profile" data-service="profile"><span class="mi">person</span> Profile &amp; KYC</a>
+          <a class="nav" href="#support" data-view="support" data-service="support" hidden><span class="mi">support_agent</span> Support</a>
         </nav>
         <div class="side-foot">
-          <span class="live">Counter open</span>
-          <strong>Outlet 1042</strong>
-          <span>Gurugram</span>
+          <span class="demo-status">Secure session</span>
+          <strong id="retailer-name">Retailer counter</strong>
+          <span id="retailer-account-id">Account ready</span>
           <button class="signout" id="logout" type="button">Sign out</button>
         </div>
       </aside>
@@ -88,11 +120,11 @@
           <button class="icon-btn menu-btn" type="button" aria-label="Open menu" aria-expanded="false"><span class="mi">menu</span></button>
           <div>
             <p class="crumb" id="crumb">Home</p>
-            <p class="outlet"><span class="live">Counter open</span> <span id="who">Outlet 1042 · Gurugram</span></p>
+            <p class="outlet"><span class="demo-status" id="kyc-badge">Retailer</span> <span id="who"></span></p>
           </div>
-          <a class="float-chip" href="#wallet">
-            <span>Available float</span>
-            <strong>₹48,250</strong>
+          <a class="float-chip" href="#wallet" id="header-wallet-chip">
+            <span>Available wallet</span>
+            <strong data-header-balance>₹0.00</strong>
           </a>
         </header>
         <main id="content" tabindex="-1">
@@ -100,9 +132,11 @@
         </main>
       </div>
     </div>
-    <div class="toast" id="toast" role="status" hidden></div>
-    <script src="js/services.js?v=1"></script>
-    <script src="js/session.js?v=1"></script>
-    <script src="js/app.js?v=3"></script>
+    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+    <script type="module" src="js/hub.js?v=12"></script>
+    <script src="js/services.js?v=31"></script>
+    <script type="module" src="js/session.js?v=7"></script>
+    <script src="js/qr.js?v=8"></script>
+    <script type="module" src="js/app.js?v=64"></script>
   </body>
 </html>

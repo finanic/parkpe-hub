@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="24" fill="#25C75F"/>
+  <text x="60" y="52" font-family="Arial,sans-serif" font-size="18" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">ola</text>
+  <!-- Car icon -->
+  <rect x="36" y="68" width="48" height="16" rx="4" fill="#fff" opacity="0.9"/>
+  <path d="M42 68 L46 60 L74 60 L78 68" fill="#fff" opacity="0.9"/>
+  <circle cx="46" cy="84" r="5" fill="#25C75F" stroke="#fff" stroke-width="2"/>
+  <circle cx="74" cy="84" r="5" fill="#25C75F" stroke="#fff" stroke-width="2"/>
+  <rect x="50" y="62" width="10" height="6" rx="1" fill="#25C75F" opacity="0.5"/>
+  <rect x="62" y="62" width="10" height="6" rx="1" fill="#25C75F" opacity="0.5"/>
+</svg>

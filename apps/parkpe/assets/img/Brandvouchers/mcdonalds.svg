@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="24" fill="#DA291C"/>
+  <!-- Golden arches M -->
+  <path d="M28 80 L28 52 Q28 42 38 42 Q48 42 48 52 L48 62 Q48 52 60 52 Q72 52 72 62 L72 52 Q72 42 82 42 Q92 42 92 52 L92 80" fill="none" stroke="#FFC72C" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

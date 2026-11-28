@@ -15,7 +15,10 @@ SCRYPT_N = 2**15
 SCRYPT_R = 8
 SCRYPT_P = 1
 SCRYPT_DKLEN = 32
-ACCESS_TTL = 15 * 60
+# Access cookie for admin, retailer, and customer. A working day, not 15 minutes.
+# One host-only cookie is shared by ParkPe, PaySwap, and the console. The role
+# check on each route is the app boundary. HTTPS origins require Secure in server.py.
+ACCESS_TTL = 24 * 60 * 60
 REFRESH_TTL = 14 * 24 * 60 * 60
 CHALLENGE_TTL = 5 * 60
 MAX_FAILS = 5
@@ -133,15 +136,21 @@ def totp_code(secret_b32: str, when: float | None = None) -> str:
     return _hotp(_totp_secret(secret_b32), int(moment) // 30)
 
 
-def totp_matches(secret_b32: str, code: str, when: float | None = None) -> bool:
+def totp_step(secret_b32: str, code: str, when: float | None = None) -> int | None:
+    """Return the 30-second counter that matched, including one step of skew."""
     if not isinstance(code, str) or not code.isdigit() or len(code) != 6:
-        return False
+        return None
     moment = time.time() if when is None else when
     secret = _totp_secret(secret_b32)
     for skew in (-30, 0, 30):
-        if hmac.compare_digest(_hotp(secret, int(moment + skew) // 30), code):
-            return True
-    return False
+        step = int(moment + skew) // 30
+        if hmac.compare_digest(_hotp(secret, step), code):
+            return step
+    return None
+
+
+def totp_matches(secret_b32: str, code: str, when: float | None = None) -> bool:
+    return totp_step(secret_b32, code, when) is not None
 
 
 def new_backup_codes() -> list[str]:

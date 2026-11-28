@@ -8,12 +8,12 @@ One shared backend, two frontends. Each product has one folder under `apps/`. Sh
 | --- | --- |
 | `apps/parkpe/` | ParkPe. `apps/parkpe/serve.py` on port 4310 (`make parkpe`). Screens in `js/`, `css/`, `dashboard/`. Feature modules in `core/`, `shared/`, `features/` (parking, fastag, carpool, qr-connect). |
 | `apps/payswap/` | PaySwap. `apps/payswap/serve.py` on port 4500 (`make payswap`). Counter in `js/`, `css/`. Feature modules in `core/`, `shared/`, `features/` (cards, vouchers, bbps, transactions). |
-| `apps/backend/` | Shared API. `apps/backend/run.py` is the auth server on port 4600 (`make hub`). Django `/api/v1/` is `manage.py` on port 4610 and calls `GET /api/auth/me` on 4600. |
-| `apps/backend/auth/` | Auth contract, HTTP, password primitives, SQLite store, operator console. |
+| `apps/backend/` | Shared API. `apps/backend/run.py` is the auth server on port 4600 (`make hub`). Django `/api/v1/` is `manage.py` on port 4610 (`make api`) and calls `GET /api/auth/me` on 4600. |
+| `apps/backend/auth/` | Auth contract, HTTP, password primitives, SQLite store, admin console. |
 | `apps/backend/tests/test_auth.py` | Auth behavior tests. |
 | `dev.py`, `Makefile` | Start and document the three processes. No product logic. |
 | `packages/contracts` | Shared DTOs, enums, and error codes. `apps/backend/schemas` matches them. |
-| `packages/sdk-client` | Shared client. Sends `X-App-Context: parkpe` or `payswap` for `apps/backend/api/v1/deps.py`. |
+| `packages/sdk-client` | Shared client. Sends `X-App-Context: parkpe` or `payswap` for `apps/backend/api/v1/deps.py`, `Idempotency-Key` on POST, PUT, and PATCH, and `X-Request-Id` when it has a safe value. |
 | `packages/ui-tokens` | Shared token names. Palettes stay in `apps/parkpe/css/dashboard.css` and `apps/payswap/css/app.css`. |
 
 A ParkPe change stays in `apps/parkpe/`. A PaySwap change stays in `apps/payswap/`. Auth changes stay in `apps/backend/auth/`. Shared names stay in `packages/`. Do not import the other app's feature folder.
@@ -22,11 +22,11 @@ A ParkPe change stays in `apps/parkpe/`. A PaySwap change stays in `apps/payswap
 
 - ParkPe UI, copy, and assets stay in `apps/parkpe/`. PaySwap UI stays in `apps/payswap/`.
 - `apps/payswap/js/session.js` is the retailer client. It sends `role: "retailer"`. ParkPe must not load that file. A ParkPe auth client, when one exists, belongs in `apps/parkpe/js/` and sends `role: "customer"`.
-- The operator console stays in `apps/backend/auth/console/` and sends `role: "operator"`. Only the first operator account can be created.
+- The admin console stays in `apps/backend/auth/console/` and sends `role: "admin"`. Only the first admin account can be created.
 - Paths, cookies, roles, and the request header are defined once in `apps/backend/auth/contract.py`. Callers use those names. Do not fork them into a frontend constant that can drift.
 - `apps/backend/auth/security.py` does not learn about routes, origins, or which app is calling.
 
-Roles are `customer` (ParkPe), `retailer` (PaySwap), and `operator` (console). Cookies are host-only on `127.0.0.1`, so both frontends can see the same jar. The role check on login is what keeps a customer session out of the retailer counter, and the reverse.
+Roles are `customer` (ParkPe), `retailer` (PaySwap), and `admin` (console). Cookies are host-only on `127.0.0.1`, so both frontends can see the same jar. The role check on login is what keeps a customer session out of the retailer counter, and the reverse.
 
 Default origins, from `apps/backend/auth/server.py`: ParkPe `http://127.0.0.1:4310`, PaySwap `http://127.0.0.1:4500`, API `http://127.0.0.1:4600`.
 
@@ -71,7 +71,7 @@ The browser is not the security boundary.
 - Authenticate and authorize in `apps/backend/auth/server.py`. Hiding a control in `apps/parkpe/` or `apps/payswap/` does not count.
 - Check method, content type, JSON object, body size (`BODY_MAX` in `apps/backend/auth/security.py`), email, password, and role before the store sees the payload.
 - Reject a role that is not the account's role. Reject a disallowed `Origin`. Keep `AUTH_ORIGINS` an explicit list.
-- Operator signup stays closed once `store.operator_exists()` is true.
+- Admin signup stays closed once `store.operator_exists()` is true.
 
 ## Secrets
 
@@ -88,6 +88,14 @@ Session transitions stay single-outcome.
 - Confirming MFA replaces that user's previous sessions. Do not add a second write that brings a revoked family back.
 - A money write on `/api/v1/` (`apps/backend/core/idempotency.py`) reserves the `Idempotency-Key` before the domain call. The same key and body return the stored result. A different body with that key is a conflict. This does not change refresh-token reuse on port 4600.
 
+## Action logs
+
+A new `/api/v1` endpoint, domain service, integration call, or other state change logs itself through `apps/backend/core/actions.py` `log_action` in the same change. This is part of the change, not a follow-up.
+
+The line carries `request_id`, `idempotency_key` when the request sent one, `app_context` (`parkpe` or `payswap`), actor, role, action, target id, outcome, status, and duration. Error lines add a `packages/contracts` error code and a short reason. `redact` removes tokens, cookies, OTPs, secrets, and raw bodies before the line is written. Do not log the request payload.
+
+Auth events on port 4600 stay in `apps/backend/auth/store.py` `audit`. They do not move into this helper.
+
 ## Verification
 
 After an edit, re-read the callers named in the relationship comment.
@@ -96,6 +104,7 @@ After an edit, re-read the callers named in the relationship comment.
 - Auth, contract, store, security, or `apps/payswap/js/session.js`: run `python3 apps/backend/tests/test_auth.py` from the repo root.
 - A ParkPe screen: `make parkpe` and use the changed screen at `http://127.0.0.1:4310/`.
 - A PaySwap screen: `make payswap` and use the changed screen at `http://127.0.0.1:4500/`.
-- The console or API: `make hub` and use `http://127.0.0.1:4600/`.
+- The console: `make hub` and use `http://127.0.0.1:4600/`. Django `/api/v1/`: `make api` at `http://127.0.0.1:4610/`.
+- BBPS commission rates auto-load from `apps/backend/data/mobikwik/commission-b2b.xlsx` on API start. Monthly GST drafts: `python3 apps/backend/manage.py generate_commission_invoices` (cron on the 1st).
 
 Say what you ran and what you did not run. Do not report a check that was skipped.

@@ -10,10 +10,11 @@ alwaysApply: false
 
 - In `apps/backend/auth/server.py`, check method, content type, JSON object, and body size (`BODY_MAX` in `apps/backend/auth/security.py`) before use. Validate email, password, and role before calling the store. `apps/backend/api/v1/deps.py` must also reject a `payswap` `X-App-Context` on `domain/parkpe`, and a `parkpe` context on `domain/payswap`. The header comes from `packages/sdk-client` and does not replace the role check.
 - A money write under `apps/backend` uses `apps/backend/core/idempotency.py`: the same `Idempotency-Key` returns the stored result and does not post twice. Refresh reuse still revokes the login family in `apps/backend/auth/server.py`.
-- Roles stay `customer` (ParkPe, `apps/parkpe/`), `retailer` (PaySwap, `apps/payswap/js/session.js`), and `operator` (`apps/backend/auth/console/`). A login whose role does not match the account fails. Hiding a button in HTML is not that check.
+- Roles stay `customer` (ParkPe, `apps/parkpe/`), `retailer` (PaySwap, `apps/payswap/js/session.js`), and `admin` (`apps/backend/auth/console/`). A login whose role does not match the account fails. Hiding a button in HTML is not that check.
 - `AUTH_ORIGINS` stays an explicit list of the ParkPe (`:4310`), PaySwap (`:4500`), and API origins. Do not open it to `*` so a call will succeed.
 - Secrets stay in the environment variables already read by `apps/backend/auth/server.py`. Do not put tokens, passwords, or `apps/backend/data/auth.sqlite` in source, tests, or comments. `apps/backend/.gitignore` already ignores `data/`.
-- Refresh reuse revokes the login family. Logout and a second use of a dead refresh token stay logged out. MFA confirm must not resurrect a revoked family. Operator signup stays closed after the first operator.
+- A state change under `apps/backend` logs through `apps/backend/core/actions.py`. The line may carry the idempotency key and the actor email. It must not carry a token, cookie, OTP, secret, or the raw body. `redact` is the filter. Auth rows in `apps/backend/auth/store.py` stay separate.
+- Refresh reuse revokes the login family. Logout and a second use of a dead refresh token stay logged out. MFA confirm must not resurrect a revoked family. Admin signup stays closed after the first admin.
 
 ```python
 # Reused refresh token: revoke the family, then 401.
