@@ -2695,11 +2695,11 @@
             btn.addEventListener("click", () => {
               const inv = byId[btn.dataset.pInvOpen];
               if (!inv?.html) return;
-              const w = window.open("", "_blank");
-              if (w) {
-                w.document.write(inv.html);
-                w.document.close();
-              }
+              const blob = new Blob([String(inv.html)], { type: "text/html;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const w = window.open(url, "_blank", "noopener,noreferrer");
+              if (!w) URL.revokeObjectURL(url);
+              else window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
             });
           });
         }

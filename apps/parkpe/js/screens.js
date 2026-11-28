@@ -304,7 +304,7 @@ function esc(value) {
 }
 
 function hero(kicker, title, lead) {
-  return `<header class="screen-hero"><a class="round-back" href="#dashboard" aria-label="Back to dashboard"><span class="mi">arrow_back</span></a><div><p class="screen-kicker">${kicker}</p><h1>${title}</h1><p>${lead}</p></div></header>`;
+  return `<header class="screen-hero"><a class="round-back" href="#dashboard" aria-label="Back to dashboard"><span class="mi">arrow_back</span></a><div><p class="screen-kicker">${esc(kicker)}</p><h1>${esc(title)}</h1><p>${esc(lead)}</p></div></header>`;
 }
 
 function opRow(name, options) {
@@ -1738,8 +1738,9 @@ async function hydrateProfileSessions(root) {
 
 window.ParkpeScreens = {
   mount(root, name) {
-    const draw = screens[name];
-    root.innerHTML = draw ? draw() : hero("ParkPe", name, "");
+    const key = String(name || "");
+    const draw = Object.prototype.hasOwnProperty.call(screens, key) ? screens[key] : null;
+    root.innerHTML = draw ? draw() : hero("ParkPe", key || "Screen", "");
     if (!wired) {
       root.addEventListener("click", async (event) => {
         const delBtn = event.target.closest("[data-delete-vehicle]");
